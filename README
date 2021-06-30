@@ -1,0 +1,52 @@
+What is pikevm?
+==============
+
+re1 (http://code.google.com/p/re1/) is "toy regular expression implementation"
+by Russel Cox, featuring simplicity and minimal code size unheard of in other
+implementations. re2 (http://code.google.com/p/re2/) is "an efficient,
+principled regular expression library" by the same author. It is robust,
+full-featured, and ... bloated, comparing to re1.
+
+This is implementation of pikevm based on re1.5 which adds features required for
+minimalistic real-world use, while sticking to the minimal code size and
+memory use.
+https://github.com/pfalcon/re1.5
+
+Why?
+====
+Pikevm guarantees that any input regex will scale O(n) with the size of the
+string, thus making it the fastest regex implementation. There is no backtracking
+that usually expodes to O(n^2). My goals were to explore this code and try
+to use in my text editor, but after closer analysis pike performs roughly
+3 times slower on small strings than traditional well optimized backtrack
+engine. The cost of addthread is not exactly O(1) so it results in many 
+extra operations since every character is processed in lockstep. There is
+also a problem of submatch tracking that grows memory usage.
+
+Features
+========
+
+* UnLike re1.5, here is only pikevm, one file easy to use.
+* Unlike re1.5, regexes is compiled to type sized code rather than bytecode,
+eliviating the problem of byte overflow in splits/jmps on large regexes. 
+Currently the type used is int, and every atom in compiled code is aligned
+to that.
+* Matcher does not take size of string as param, it checks for '\0' instead,
+so that the user does not need to waste time taking strlen()
+* Support for quoted chars in regex.
+* Support for ^, $ assertions in regex.
+* Support for "match" vs "search" operations, as common in other regex APIs.
+* Support for named character classes: \d \D \s \S \w \W.
+* Support for repetition operator {n} and {n,m}.
+
+TODO
+====
+
+* Support for Unicode (UTF-8). (trivial to do, because of int type sized code)
+* Support for matching flags like case-insensitive, dot matches all,
+multiline, etc.
+* Support for more assertions like \A, \Z.
+
+Author and License
+==================
+licensed under BSD license, just as the original re1.
