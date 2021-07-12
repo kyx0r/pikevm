@@ -117,12 +117,6 @@ rsub* newsub(int n)
 	return s;
 }
 
-rsub* incref(rsub *s)
-{
-	s->ref++;
-	return s;
-}
-
 rsub* update(rsub *s, int i, const char *p)
 {
 	rsub *s1;
@@ -526,54 +520,49 @@ void cleanmarks(rcode *prog)
 	}
 }
 
-static rthread thread(int *pc, rsub *sub)
-{
-	rthread t = {pc, sub};
-	return t;
-}
-
-static void addthread(rthreadlist *l, rthread t, const char *beg, const char *sp)
+static void addthread(rthreadlist *l, int *pc, rsub *sub, const char *beg, const char *sp)
 {
 	int off;
-	if(*t.pc & 0x80) {
-		decref(t.sub);
+	rec:
+	if(*pc & 0x80) {
+		decref(sub);
 		return;	// already on list
 	}
-	*t.pc |= 0x80;
+	*pc |= 0x80;
 
-	switch(*t.pc & 0x7f) {
+	switch(*pc & 0x7f) {
 	default:
-		l->t[l->n++] = t;
+		l->t[l->n].sub = sub;
+		l->t[l->n++].pc = pc;
 		break;
 	case JMP:
-		off = t.pc[1];
-		t.pc += 2;
-		addthread(l, thread(t.pc + off, t.sub), beg, sp);
-		break;
+		off = pc[1];
+		pc += 2 + off;
+		goto rec;
 	case SPLIT:
-		off = t.pc[1];
-		t.pc += 2;
-		addthread(l, thread(t.pc, incref(t.sub)), beg, sp);
-		addthread(l, thread(t.pc + off, t.sub), beg, sp);
-		break;
+		off = pc[1];
+		sub->ref++;
+		addthread(l, pc+2, sub, beg, sp);
+		pc += 2 + off;
+		goto rec;
 	case RSPLIT:
-		off = t.pc[1];
-		t.pc += 2;
-		addthread(l, thread(t.pc + off, incref(t.sub)), beg, sp);
-		addthread(l, thread(t.pc, t.sub), beg, sp);
-		break;
+		off = pc[1];
+		pc += 2;
+		sub->ref++;
+		addthread(l, pc + off, sub, beg, sp);
+		goto rec;
 	case SAVE:
-		off = t.pc[1];
-		t.pc += 2;
-		addthread(l, thread(t.pc, update(t.sub, off, sp)), beg, sp);
-		break;
+		off = pc[1];
+		pc += 2;
+		sub = update(sub, off, sp);
+		goto rec;
 	case BOL:
 		if(sp == beg)
-			addthread(l, thread(t.pc + 1, t.sub), beg, sp);
+			{ pc++; goto rec; }
 		break;
 	case EOL:
 		if(!*sp)
-			addthread(l, thread(t.pc + 1, t.sub), beg, sp);
+			{ pc++; goto rec; }
 		break;
 	}
 }
@@ -598,7 +587,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 		sub->sub[i] = NULL;
 
 	cleanmarks(prog);
-	addthread(clist, thread(prog->insts, sub), s, s);
+	addthread(clist, prog->insts, sub, s, s);
 	for(sp=s;; sp++) {
 		if(clist->n == 0)
 			break;
@@ -620,7 +609,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 				}
 			case ANY:
 			addthread:
-				addthread(nlist, thread(pc, sub), s, sp+1);
+				addthread(nlist, pc, sub, s, sp+1);
 				break;
 			case CLASS:
 			case CLASSNOT:
