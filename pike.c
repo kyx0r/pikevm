@@ -45,15 +45,15 @@ enum	/* rinst.opcode */
 	CLASSNOT,
 	NAMEDCLASS,
 	// Assert position
-	BOL = 0x50,
+	BOL,
 	EOL,
 	// Instructions which take relative offset as arg
-	JMP = 0x60,
+	JMP,
 	SPLIT,
 	RSPLIT,
 	// Other (special) instructions
-	SAVE = 0x7e,
-	MATCH = 0x7f,
+	SAVE,
+	MATCH,
 };
 
 // Return codes for re_sizecode() and re_comp()
@@ -497,40 +497,18 @@ int re_comp(rcode *prog, const char *re, int anchored)
 	return RE_SUCCESS;
 }
 
-void cleanmarks(rcode *prog)
-{
-	int *pc = prog->insts;
-	int *end = pc + prog->unilen;
-	while (pc < end) {
-		*pc &= 0x7f;
-		switch (*pc) {
-		case CLASS:
-		case CLASSNOT:
-			pc += pc[1] * 2;
-		case NAMEDCLASS:
-		case JMP:
-		case SPLIT:
-		case RSPLIT:
-		case SAVE:
-		case CHAR:
-			pc++;
-			break;
-		}
-		pc++;
-	}
-}
-
-static void addthread(rthreadlist *l, int *pc, rsub *sub, const char *beg, const char *sp)
+static void addthread(const int *pbeg, int *plist, int gen, rthreadlist *l,
+			 int *pc, rsub *sub, const char *beg, const char *sp)
 {
 	int off;
 	rec:
-	if(*pc & 0x80) {
+	if(plist[pc - pbeg] == gen) {
 		decref(sub);
 		return;	// already on list
 	}
-	*pc |= 0x80;
+	plist[pc - pbeg] = gen;
 
-	switch(*pc & 0x7f) {
+	switch(*pc) {
 	default:
 		l->t[l->n].sub = sub;
 		l->t[l->n++].pc = pc;
@@ -542,14 +520,14 @@ static void addthread(rthreadlist *l, int *pc, rsub *sub, const char *beg, const
 	case SPLIT:
 		off = pc[1];
 		sub->ref++;
-		addthread(l, pc+2, sub, beg, sp);
+		addthread(pbeg, plist, gen, l, pc+2, sub, beg, sp);
 		pc += 2 + off;
 		goto rec;
 	case RSPLIT:
 		off = pc[1];
 		pc += 2;
 		sub->ref++;
-		addthread(l, pc + off, sub, beg, sp);
+		addthread(pbeg, plist, gen, l, pc + off, sub, beg, sp);
 		goto rec;
 	case SAVE:
 		off = pc[1];
@@ -569,12 +547,14 @@ static void addthread(rthreadlist *l, int *pc, rsub *sub, const char *beg, const
 
 int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 {
-	int i, *pc;
+	int i, gen, *pc;
 	const char *sp;
+	int plist[prog->unilen];
 	rsub *sub, *matched = NULL;
 	rthreadlist _clist[1+prog->len]; 
 	rthreadlist _nlist[1+prog->len]; 
 	rthreadlist *clist = _clist, *nlist = _nlist, *tmp;
+	memset(plist, 0, prog->unilen*sizeof(plist[0]));
 	memset(clist, 0, (1+prog->len)*sizeof(rthread));
 	memset(nlist, 0, (1+prog->len)*sizeof(rthread));
 
@@ -586,22 +566,22 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 	for(i=0; i<nsubp; i++)
 		sub->sub[i] = NULL;
 
-	cleanmarks(prog);
-	addthread(clist, prog->insts, sub, s, s);
+	gen = 1;
+	addthread(prog->insts, plist, gen, clist, prog->insts, sub, s, s);
 	for(sp=s;; sp++) {
 		if(clist->n == 0)
 			break;
-		cleanmarks(prog);
+		gen++;
 		for(i=0; i<clist->n; i++) {
 			pc = clist->t[i].pc;
 			sub = clist->t[i].sub;
-			if (inst_is_consumer(*pc & 0x7f) && !*sp) {
+			if (inst_is_consumer(*pc) && !*sp) {
 				// If we need to match a character, but there's none left,
 				// it's fail (we don't schedule current thread for continuation)
 				decref(sub);
 				continue;
 			}
-			switch(*pc++ & 0x7f) {
+			switch(*pc++) {
 			case CHAR:
 				if(*sp != *pc++) {
 					decref(sub);
@@ -609,7 +589,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 				}
 			case ANY:
 			addthread:
-				addthread(nlist, pc, sub, s, sp+1);
+				addthread(prog->insts, plist, gen, nlist, pc, sub, s, sp+1);
 				break;
 			case CLASS:
 			case CLASSNOT:
@@ -670,7 +650,7 @@ int main(int argc, char *argv[])
 				if(sub[k-1])
 					break;
 			for(int l=0; l<sub_els; l+=2) {
-				printf(" (");
+				printf("(");
 				if(sub[l] == NULL)
 					printf("?");
 				else
