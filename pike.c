@@ -645,7 +645,7 @@ int main(int argc, char *argv[])
 		for (int i = 2; i < argc; i++) {
 			printf("sub depth %d\n", subidx);
 			if(!re_pikevm(_code, argv[i], sub, sub_els))
-				{ printf("-no match-\n"); continue; }
+				{ printf("-nomatch-\n"); continue; }
 			for(int k=sub_els; k>0; k--)
 				if(sub[k-1])
 					break;
