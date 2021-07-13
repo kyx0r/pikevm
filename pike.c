@@ -1,6 +1,5 @@
 // Copyright 2007-2009 Russ Cox.  All Rights Reserved.
 // Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -201,7 +200,7 @@ void re_dumpcode(rcode *prog)
 			printf("any\n");
 			break;
 		case CLASS:
-		case CLASSNOT: {
+		case CLASSNOT:;
 			int num = code[pc];
 			printf("class%s %d", (code[pc - 1] == CLASSNOT ? "not" : ""), num);
 			pc++;
@@ -211,7 +210,6 @@ void re_dumpcode(rcode *prog)
 			}
 			printf("\n");
 			break;
-		}
 		case NAMEDCLASS:
 			printf("namedclass %c\n", code[pc++]);
 			break;
@@ -632,6 +630,10 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 
 int main(int argc, char *argv[])
 {
+	if (argc < 2) {
+		printf("usage: <regex> <str...> <str...> ...\n");
+		return 0;
+	}
 	int sz = re_sizecode(argv[1]) * sizeof(int);
 	printf("Precalculated size: %d\n", sz);
 	char code[sizeof(rcode)+sz];

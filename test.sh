@@ -1,3 +1,4 @@
+#!/bin/sh
 
 regex="\
 abc
@@ -38,7 +39,6 @@ a{5}
 (abc+){5}|[0-9]{1,}
 b[^c]*
 "
-
 input="\
 abcdef
 abcdef
@@ -78,7 +78,6 @@ abcabcabcabcabcabchsdfhsdh
 62374623
 djfjgjsdfjbshdhfhshd
 "
-
 expect="\
 (0,3)
 (2,5)
@@ -119,7 +118,6 @@ expect="\
 (10,20)
 (0,0)
 "
-
 c=1
 echo "$regex" | tr '\n' | while read re; do
 	inp=$(echo "$input" | awk -v c=$c 'BEGIN{ RS = "" ; FS = "\n" }{print $c}')
