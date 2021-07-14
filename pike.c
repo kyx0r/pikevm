@@ -498,10 +498,17 @@ int re_comp(rcode *prog, const char *re, int anchored)
 static void addthread(const int *pbeg, int *plist, int gen, rthreadlist *l,
 			 int *pc, rsub *sub, const char *beg, const char *sp)
 {
-	int off;
+	int i = 0, *pcs[10];
+	rsub *subs[10];
 	rec:
 	if(plist[pc - pbeg] == gen) {
 		decref(sub);
+		rec_check:
+		if (i) {
+			pc = pcs[--i];
+			sub = subs[i];
+			goto rec;
+		}
 		return;	// already on list
 	}
 	plist[pc - pbeg] = gen;
@@ -510,36 +517,35 @@ static void addthread(const int *pbeg, int *plist, int gen, rthreadlist *l,
 	default:
 		l->t[l->n].sub = sub;
 		l->t[l->n++].pc = pc;
-		break;
+		goto rec_check;
 	case JMP:
-		off = pc[1];
-		pc += 2 + off;
+		pc += 2 + pc[1];
 		goto rec;
 	case SPLIT:
-		off = pc[1];
+		subs[i] = sub;
 		sub->ref++;
-		addthread(pbeg, plist, gen, l, pc+2, sub, beg, sp);
-		pc += 2 + off;
+		pc += 2;
+		pcs[i++] = pc + pc[-1];
 		goto rec;
 	case RSPLIT:
-		off = pc[1];
-		pc += 2;
+		subs[i] = sub;
 		sub->ref++;
-		addthread(pbeg, plist, gen, l, pc + off, sub, beg, sp);
+		pc += 2;
+		pcs[i++] = pc;
+		pc += pc[-1];
 		goto rec;
 	case SAVE:
-		off = pc[1];
+		sub = update(sub, pc[1], sp);
 		pc += 2;
-		sub = update(sub, off, sp);
 		goto rec;
 	case BOL:
-		if(sp == beg)
-			{ pc++; goto rec; }
-		break;
+		if(sp != beg)
+			goto rec_check;
+		pc++; goto rec;
 	case EOL:
-		if(!*sp)
-			{ pc++; goto rec; }
-		break;
+		if(*sp)
+			goto rec_check;
+		pc++; goto rec;
 	}
 }
 
