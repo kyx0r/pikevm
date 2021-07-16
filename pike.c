@@ -9,6 +9,44 @@
 
 #define nelem(x) (sizeof(x)/sizeof((x)[0]))
 
+const unsigned char utf8_length[256] = {
+	/* 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
+	/* 0 */ 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	/* 1 */ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	/* 2 */ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	/* 3 */ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	/* 4 */ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	/* 5 */ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	/* 6 */ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	/* 7 */ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	/* 8 */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/* 9 */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/* A */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/* B */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/* C */ 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+	/* D */ 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+	/* E */ 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+	/* F */ 4, 4, 4, 4, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+
+/* return the length of a utf-8 character */
+#define uc_len(dst, s) \
+dst = utf8_length[(unsigned char)s[0]]; \
+
+/* the unicode codepoint of the given utf-8 character */
+#define uc_code(dst, s) \
+dst = (unsigned char) s[0]; \
+if (~dst & 0xc0); \
+else if (~dst & 0x20) \
+	dst = ((dst & 0x1f) << 6) | (s[1] & 0x3f); \
+else if (~dst & 0x10) \
+	dst = ((dst & 0x0f) << 12) | ((s[1] & 0x3f) << 6) | (s[2] & 0x3f); \
+else if (~dst & 0x08) \
+	dst = ((dst & 0x07) << 18) | ((s[1] & 0x3f) << 12) | \
+		((s[2] & 0x3f) << 6) | (s[3] & 0x3f); \
+else \
+	dst = 0; \
+
 typedef struct rinst rinst;
 struct rinst
 {
@@ -144,9 +182,10 @@ int re_classmatch(const int *pc, const char *sp)
 {
 	// pc points to "cnt" byte after opcode
 	int is_positive = (pc[-1] == CLASS);
-	int cnt = *pc++;
+	int cnt = *pc++, c;
+	uc_code(c, sp)
 	while (cnt--) {
-		if (*sp >= *pc && *sp <= pc[1]) return is_positive;
+		if (c >= *pc && c <= pc[1]) return is_positive;
 		pc += 2;
 	}
 	return !is_positive;
@@ -234,16 +273,15 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 {
 	const char *re = *re_loc;
 	int *code = sizecode ? NULL : prog->insts;
-	int start = PC;
-	int term = PC;
-	int alt_label = 0;
+	int start = PC, term = PC;
+	int alt_label = 0, c;
 
-	for (; *re && *re != ')'; re++) {
+	for (; *re && *re != ')';) {
 		switch (*re) {
-		case '\\':;
+		case '\\':
 			re++;
 			if (!*re) goto syntax_error; // Trailing backslash
-			char c = *re | 0x20;
+			c = *re | 0x20;
 			if (c == 'd' || c == 's' || c == 'w') {
 				term = PC;
 				EMIT(PC++, NAMEDCLASS);
@@ -256,7 +294,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 		default:
 			term = PC;
 			EMIT(PC++, CHAR);
-			EMIT(PC++, *re);
+			uc_code(c, re) EMIT(PC++, c);
 			prog->len++;
 			break;
 		case '.':
@@ -276,7 +314,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			}
 			PC++; // Skip "# of pairs" byte
 			prog->len++;
-			for (cnt = 0; *re != ']'; re++, cnt++) {
+			for (cnt = 0; *re != ']'; cnt++) {
 				if (!*re) goto syntax_error;
 				if (*re == '\\') {
 					re++;
@@ -284,10 +322,12 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 					if (*re != '\\' && *re != ']')
 						goto unsupported_escape;
 				}
-				EMIT(PC++, *re);
-				if (re[1] == '-' && re[2] != ']')
-					re += 2;
-				EMIT(PC++, *re);
+				uc_code(c, re) EMIT(PC++, c);
+				uc_len(c, re)
+				if (re[c] == '-' && re[c+1] != ']')
+					re += c+1;
+				uc_code(c, re) EMIT(PC++, c);
+				uc_len(c, re) re += c;
 			}
 			EMIT(term + 1, cnt);
 			break;
@@ -433,6 +473,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			term = PC;
 			break;
 		}
+		uc_len(c, re) re += c;
 	}
 	if (alt_label) {
 		EMIT(alt_label, REL(alt_label, PC) + 1);
@@ -551,7 +592,7 @@ static void addthread(const int *pbeg, int *plist, int gen, rthreadlist *l,
 
 int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 {
-	int i, gen, *pc;
+	int i, c, l, gen, *pc;
 	const char *sp;
 	int plist[prog->unilen];
 	rsub *sub, *matched = NULL;
@@ -572,10 +613,10 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 
 	gen = 1;
 	addthread(prog->insts, plist, gen, clist, prog->insts, sub, s, s);
-	for(sp=s;; sp++) {
+	for(sp=s;; sp += l) {
 		if(clist->n == 0)
 			break;
-		gen++;
+		gen++; uc_len(l, s)
 		for(i=0; i<clist->n; i++) {
 			pc = clist->t[i].pc;
 			sub = clist->t[i].sub;
@@ -587,13 +628,14 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 			}
 			switch(*pc++) {
 			case CHAR:
-				if(*sp != *pc++) {
+				uc_code(c, sp)
+				if(c != *pc++) {
 					decref(sub);
 					break;
 				}
 			case ANY:
 			addthread:
-				addthread(prog->insts, plist, gen, nlist, pc, sub, s, sp+1);
+				addthread(prog->insts, plist, gen, nlist, pc, sub, s, sp+l);
 				break;
 			case CLASS:
 			case CLASSNOT:
@@ -652,6 +694,7 @@ int main(int argc, char *argv[])
 		const char *sub[sub_els];
 		for (int i = 2; i < argc; i++) {
 			printf("sub depth %d\n", subidx);
+			printf("input bytelen: %d\n", strlen(argv[i]));
 			if(!re_pikevm(_code, argv[i], sub, sub_els))
 				{ printf("-nomatch-\n"); continue; }
 			for(int k=sub_els; k>0; k--)
