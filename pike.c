@@ -79,7 +79,6 @@ enum	/* rinst.opcode */
 	CHAR = 1,
 	ANY,
 	CLASS,
-	CLASSNOT,
 	NAMEDCLASS,
 	// Assert position
 	BOL,
@@ -180,8 +179,8 @@ void decref(rsub *s)
 
 int re_classmatch(const int *pc, const char *sp)
 {
-	// pc points to "cnt" byte after opcode
-	int is_positive = (pc[-1] == CLASS);
+	// pc points to "classnot" byte after opcode
+	int is_positive = *pc++;
 	int cnt = *pc++, c;
 	uc_code(c, sp)
 	while (cnt--) {
@@ -238,11 +237,10 @@ void re_dumpcode(rcode *prog)
 		case ANY:
 			printf("any\n");
 			break;
-		case CLASS:
-		case CLASSNOT:;
-			int num = code[pc];
-			printf("class%s %d", (code[pc - 1] == CLASSNOT ? "not" : ""), num);
-			pc++;
+		case CLASS:;
+			pc += 2;
+			int num = code[pc - 1];
+			printf("class%s %d", (code[pc - 2] ? "" : "not"), num);
 			while (num--) {
 				printf(" 0x%02x-0x%02x", code[pc], code[pc + 1]);
 				pc += 2;
@@ -306,12 +304,12 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			int cnt;
 			term = PC;
 			re++;
+			EMIT(PC++, CLASS);
 			if (*re == '^') {
-				EMIT(PC++, CLASSNOT);
+				EMIT(PC++, 0);
 				re++;
-			} else {
-				EMIT(PC++, CLASS);
-			}
+			} else
+				EMIT(PC++, 1);
 			PC++; // Skip "# of pairs" byte
 			prog->len++;
 			for (cnt = 0; *re != ']'; cnt++) {
@@ -329,7 +327,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 				uc_code(c, re) EMIT(PC++, c);
 				uc_len(c, re) re += c;
 			}
-			EMIT(term + 1, cnt);
+			EMIT(term + 2, cnt);
 			break;
 		case '(':;
 			term = PC;
@@ -346,7 +344,6 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 					return RE_UNSUPPORTED_SYNTAX;
 				}
 			}
-	
 			if (capture) {
 				sub = ++prog->sub;
 				EMIT(PC++, SAVE);
@@ -357,7 +354,6 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			*re_loc = re;
 			if (res < 0) return res;
 			if (*re != ')') return RE_SYNTAX_ERROR;
-	
 			if (capture) {
 				EMIT(PC++, SAVE);
 				EMIT(PC++, 2 * sub + 1);
@@ -396,7 +392,6 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 				for (i = 0; i < size; i++)
 					switch (code[term]) {
 					case CLASS:
-					case CLASSNOT:
 					case NAMEDCLASS:
 					case JMP:
 					case SPLIT:
@@ -638,12 +633,11 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 				addthread(prog->insts, plist, gen, nlist, pc, sub, s, sp+l);
 				break;
 			case CLASS:
-			case CLASSNOT:
 				if (!re_classmatch(pc, sp)) {
 					decref(sub);
 					break;
 				}
-				pc += *pc * 2 + 1;
+				pc += *(pc+1) * 2 + 2;
 				goto addthread;
 			case NAMEDCLASS:
 				if (!re_namedclassmatch(pc, sp)) {
