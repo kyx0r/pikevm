@@ -80,7 +80,6 @@ enum	/* rinst.opcode */
 	CHAR = 1,
 	ANY,
 	CLASS,
-	NAMEDCLASS,
 	// Assert position
 	BOL,
 	EOL,
@@ -150,24 +149,6 @@ int re_classmatch(const int *pc, const char *sp)
 	return !is_positive;
 }
 
-int re_namedclassmatch(const int *pc, const char *sp)
-{
-	// pc points to name of class
-	int off = (*pc >> 5) & 1;
-	if ((*pc | 0x20) == 'd') {
-		if (!(*sp >= '0' && *sp <= '9'))
-			off ^= 1;
-	} else if ((*pc | 0x20) == 's') {
-		if (!(*sp == ' ' || (*sp >= '\t' && *sp <= '\r')))
-			off ^= 1;
-	} else { // w
-		if (!((*sp >= 'A' && *sp <= 'Z') || (*sp >= 'a' && *sp <= 'z') ||
-			(*sp >= '0' && *sp <= '9') || *sp == '_'))
-			off ^= 1;
-	}
-	return off;
-}
-
 void re_dumpcode(rcode *prog)
 {
 	int pc = 0;
@@ -207,9 +188,6 @@ void re_dumpcode(rcode *prog)
 			}
 			printf("\n");
 			break;
-		case NAMEDCLASS:
-			printf("namedclass %c\n", code[pc++]);
-			break;
 		case MATCH:
 			printf("match\n");
 			break;
@@ -239,16 +217,6 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 		case '\\':
 			re++;
 			if (!*re) goto syntax_error; // Trailing backslash
-			c = *re | 0x20;
-			if (c == 'd' || c == 's' || c == 'w') {
-				term = PC;
-				EMIT(PC++, NAMEDCLASS);
-				EMIT(PC++, *re);
-				prog->len++;
-				break;
-			}
-			if ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z'))
-				goto unsupported_escape;
 		default:
 			term = PC;
 			EMIT(PC++, CHAR);
@@ -353,7 +321,6 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 				for (i = 0; i < size; i++)
 					switch (code[term]) {
 					case CLASS:
-					case NAMEDCLASS:
 					case JMP:
 					case SPLIT:
 					case RSPLIT:
@@ -591,7 +558,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 	for(sp=s;; sp += l) {
 		if(clist->n == 0)
 			break;
-		gen++; uc_len(l, s)
+		gen++; uc_len(l, sp)
 		for(i=0; i<clist->n; i++) {
 			npc = clist->t[i].pc;
 			nsub = clist->t[i].sub;
@@ -613,11 +580,6 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 				if (!re_classmatch(npc, sp))
 					break;
 				npc += *(npc+1) * 2 + 2;
-				goto addthread;
-			case NAMEDCLASS:
-				if (!re_namedclassmatch(npc, sp))
-					break;
-				npc++;
 				goto addthread;
 			case MATCH:
 				matched = nsub;

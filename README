@@ -41,7 +41,7 @@ TODO
 
 * Support for matching flags like case-insensitive, dot matches all,
 multiline, etc.
-* Support for more assertions like \A, \Z.
+* Support for wordend & wordbeg assertions
 
 Author and License
 ==================
