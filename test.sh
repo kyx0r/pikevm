@@ -46,6 +46,8 @@ b[^c]*
 ([^abc])|(a+)
 [a-g]+
 [а-г]+
+called|chief|dust|familiar|forth|waif|campaign|divers|smile|notice|kill|human|stands|nightshade|dollar|doughty|gloaming|twist|July|officers|wrest|coop|one|ability|welcome|significance|writer|spring|it's|helped|set|Paris|from|coomb|stay|hummock|taken|anon|makes|boat|nearly|am|justice|further|expression|contemporary|sooth|order|about|question|lived|apply|educational|of|night|satisfy|opened|never|success|until|visit|promise|parts|beneath|matter|typical|bade|apartment|rapidly|primary|bring|throat|hold|laws|understand|trade|desire|material|evidence|another|often|plash|model|someone|bond|hell|relationship|probably|exercise|performance|wants|known|countries|gammer|leeward|took|itself|representative|objection|aircraft
+abc+h+d+f
 "
 input="\
 abcdef
@@ -93,6 +95,8 @@ abc
 aaaa
 aaaabcdefghij
 ааааабвг...
+hhfd h23  performance
+abcccccccccccchdf
 "
 expect="\
 (0,3)
@@ -140,18 +144,22 @@ expect="\
 (0,4)(?,?)(0,4)
 (0,10)
 (0,16)
+(10,21)
+(0,17)
 (0,0)
 "
 c=1
 echo "$regex" | tr '\n' | while read re; do
 	inp=$(echo "$input" | awk -v c=$c 'BEGIN{ RS = "" ; FS = "\n" }{print $c}')
 	exp=$(echo "$expect" | awk -v c=$c 'BEGIN{ RS = "" ; FS = "\n" }{print $c}')
-	var=$(echo $(./a.out "$re" "$inp" | awk 'END{print}'))
-	if [ ! "$exp" = "$var" ]; then
-		echo "fail test$c regex:$re input:$inp expect:$exp output:$var"
+	var=$(./a.out "$re" "$inp")
+	var1=$(echo "$var" | tail -1)
+	if [ ! "$exp" = "$var1" ]; then
+		echo "fail test$c regex:$re input:$inp expect:$exp output:$var1"
 		exit 1
 	fi
-	echo "pass test$c regex:$re input:$inp expect:$exp output:$var"
+	time=$(echo "$var" | tail -2 | head -n1)
+	echo "pass test$c regex:$re input:$inp expect:$exp output:$var1 $time"
 	c=$((c+1))
 done
 

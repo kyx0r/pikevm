@@ -70,6 +70,7 @@ struct rcode
 	int unilen;
 	int len;
 	int sub;
+	int splits;
 	int insts[];
 };
 
@@ -105,7 +106,6 @@ typedef struct rsub rsub;
 struct rsub
 {
 	int ref;
-	int nsub;
 	const char *sub[128];
 };
 
@@ -135,46 +135,6 @@ void re_fatal(char *msg)
 {
 	fprintf(stderr, "fatal error: %s\n", msg);
 	exit(2);
-}
-
-static rsub *freesub;
-static rsub subs[10];
-static int subidx;
-
-rsub* newsub(int n)
-{
-	rsub *s = freesub;
-	if(s != NULL)
-		freesub = (rsub*)s->sub[0];
-	else
-		s = &subs[subidx++];
-	s->nsub = n;
-	s->ref = 1;
-	return s;
-}
-
-rsub* update(rsub *s, int i, const char *p)
-{
-	rsub *s1;
-	int j;
-
-	if(s->ref > 1) {
-		s1 = newsub(s->nsub);
-		for(j=0; j<s->nsub; j++)
-			s1->sub[j] = s->sub[j];
-		s->ref--;
-		s = s1;
-	}
-	s->sub[i] = p;
-	return s;
-}
-
-void decref(rsub *s)
-{
-	if(--s->ref == 0) {
-		s->sub[0] = (char*)freesub;
-		freesub = s;
-	}
 }
 
 int re_classmatch(const int *pc, const char *sp)
@@ -382,6 +342,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			split = *(re+1) == '[' ? RSPLIT : SPLIT;
 			for (i = maxcnt-mincnt; i > 0; i--)
 			{
+				prog->splits++;
 				EMIT(PC++, split);
 				EMIT(PC++, REL(PC, PC+((size+2)*i)));
 				if (code)
@@ -414,6 +375,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			}
 			EMIT(term + 1, REL(term, PC));
 			prog->len++;
+			prog->splits++;
 			term = PC;
 			break;
 		case '*':
@@ -429,6 +391,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 				EMIT(term, SPLIT);
 			}
 			EMIT(term + 1, REL(term, PC));
+			prog->splits++;
 			prog->len += 2;
 			term = PC;
 			break;
@@ -442,6 +405,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			}
 			EMIT(PC + 1, REL(PC, term));
 			PC += 2;
+			prog->splits++;
 			prog->len++;
 			term = PC;
 			break;
@@ -454,6 +418,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			alt_label = PC++;
 			EMIT(start, SPLIT);
 			EMIT(start + 1, REL(start, PC));
+			prog->splits++;
 			prog->len += 2;
 			term = PC;
 			break;
@@ -502,6 +467,7 @@ int re_comp(rcode *prog, const char *re, int anchored)
 	prog->len = 0;
 	prog->unilen = 0;
 	prog->sub = 0;
+	prog->splits = 0;
 
 	// Add code to implement non-anchored operation ("search").
 	// For anchored operation ("match"), this code will be just skipped.
@@ -516,6 +482,7 @@ int re_comp(rcode *prog, const char *re, int anchored)
 		prog->insts[prog->unilen++] = SAVE;
 		prog->insts[prog->unilen++] = 0;
 		prog->len += 4;
+		prog->splits++;
 	}
 	int res = _compilecode(&re, prog, /*sizecode*/0);
 	if (res < 0) return res;
@@ -524,136 +491,141 @@ int re_comp(rcode *prog, const char *re, int anchored)
 
 	prog->insts[prog->unilen++] = SAVE;
 	prog->insts[prog->unilen++] = 1;
-
 	prog->insts[prog->unilen++] = MATCH;
 	prog->len += 2;
 
 	return RE_SUCCESS;
 }
 
-static void addthread(const int *pbeg, int *plist, int gen, rthreadlist *l,
-			 int *pc, rsub *sub, const char *beg, const char *sp)
-{
-	int i = 0, *pcs[10];
-	rsub *subs[10];
-	rec:
-	if(plist[pc - pbeg] == gen) {
-		decref(sub);
-		rec_check:
-		if (i) {
-			pc = pcs[--i];
-			sub = subs[i];
-			goto rec;
-		}
-		return;	// already on list
-	}
-	plist[pc - pbeg] = gen;
-
-	switch(*pc) {
-	default:
-		l->t[l->n].sub = sub;
-		l->t[l->n++].pc = pc;
-		goto rec_check;
-	case JMP:
-		pc += 2 + pc[1];
-		goto rec;
-	case SPLIT:
-		subs[i] = sub;
-		sub->ref++;
-		pc += 2;
-		pcs[i++] = pc + pc[-1];
-		goto rec;
-	case RSPLIT:
-		subs[i] = sub;
-		sub->ref++;
-		pc += 2;
-		pcs[i++] = pc;
-		pc += pc[-1];
-		goto rec;
-	case SAVE:
-		sub = update(sub, pc[1], sp);
-		pc += 2;
-		goto rec;
-	case BOL:
-		if(sp != beg)
-			goto rec_check;
-		pc++; goto rec;
-	case EOL:
-		if(*sp)
-			goto rec_check;
-		pc++; goto rec;
-	}
-}
+#define addthread(nn, list, _pc, _sub, _sp, cont) \
+{ \
+	int i = 0, j, *pc = _pc; \
+	rsub *s1, *sub = _sub; \
+	rec##nn: \
+	if(plist[pc - prog->insts] == gen) { \
+		sub->ref--; \
+		rec_check##nn: \
+		if (i) { \
+			pc = pcs[--i]; \
+			sub = subs[i]; \
+			goto rec##nn; \
+		} \
+		cont; \
+	} \
+	plist[pc - prog->insts] = gen; \
+	switch(*pc) { \
+	default: \
+		list->t[list->n].sub = sub; \
+		list->t[list->n++].pc = pc; \
+		goto rec_check##nn; \
+	case JMP: \
+		pc += 2 + pc[1]; \
+		goto rec##nn; \
+	case SPLIT: \
+		subs[i] = sub; \
+		sub->ref++; \
+		pc += 2; \
+		pcs[i++] = pc + pc[-1]; \
+		goto rec##nn; \
+	case RSPLIT: \
+		subs[i] = sub; \
+		sub->ref++; \
+		pc += 2; \
+		pcs[i++] = pc; \
+		pc += pc[-1]; \
+		goto rec##nn; \
+	case SAVE: \
+		if (sub->ref > 1) { \
+			for (j = 0; j < subidx; j++) { \
+				if (nsubs[j].ref <= 0) { \
+					s1 = &nsubs[j]; \
+					goto freedsub##nn; \
+				} \
+			} \
+			s1 = &nsubs[subidx++]; \
+			freedsub##nn: \
+			for (j = 0; j < nsubp; j++) \
+				s1->sub[j] = sub->sub[j]; \
+			sub = s1; \
+			sub->ref = 1; \
+		} \
+		sub->sub[pc[1]] = _sp; \
+		pc += 2; \
+		goto rec##nn; \
+	case BOL: \
+		if(_sp != s) \
+			goto rec_check##nn; \
+		pc++; goto rec##nn; \
+	case EOL: \
+		if(*(_sp)) \
+			goto rec_check##nn; \
+		pc++; goto rec##nn; \
+	} \
+} \
 
 int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 {
-	int i, c, l, gen, *pc;
+	int i, c, l, *npc, gen = 1, subidx = 1;
 	const char *sp;
+	rsub nsubs[256];
 	int plist[prog->unilen];
-	rsub *sub, *matched = NULL;
+	int *pcs[prog->splits];
+	rsub *subs[prog->splits];
+	rsub *nsub = nsubs, *matched = NULL;
 	rthreadlist _clist[1+prog->len]; 
 	rthreadlist _nlist[1+prog->len]; 
 	rthreadlist *clist = _clist, *nlist = _nlist, *tmp;
 	memset(plist, 0, prog->unilen*sizeof(plist[0]));
 	memset(clist, 0, (1+prog->len)*sizeof(rthread));
 	memset(nlist, 0, (1+prog->len)*sizeof(rthread));
+	nsub->ref = 1;
 
-	subidx = 0;
-	freesub = NULL;
-	for(i=0; i<nsubp; i++)
+	for(i=0; i<nsubp; i++) {
 		subp[i] = NULL;
-	sub = newsub(nsubp);
-	for(i=0; i<nsubp; i++)
-		sub->sub[i] = NULL;
+		nsub->sub[i] = NULL;
+	}
 
 	gen = 1;
-	addthread(prog->insts, plist, gen, clist, prog->insts, sub, s, s);
+	while (1)
+		addthread(1, clist, prog->insts, nsub, s, break)
 	for(sp=s;; sp += l) {
 		if(clist->n == 0)
 			break;
 		gen++; uc_len(l, s)
 		for(i=0; i<clist->n; i++) {
-			pc = clist->t[i].pc;
-			sub = clist->t[i].sub;
-			if (inst_is_consumer(*pc) && !*sp) {
+			npc = clist->t[i].pc;
+			nsub = clist->t[i].sub;
+			if (inst_is_consumer(*npc) && !*sp) {
 				// If we need to match a character, but there's none left,
 				// it's fail (we don't schedule current thread for continuation)
-				decref(sub);
+				nsub->ref--;
 				continue;
 			}
-			switch(*pc++) {
+			switch(*npc++) {
 			case CHAR:
 				uc_code(c, sp)
-				if(c != *pc++) {
-					decref(sub);
+				if(c != *npc++)
 					break;
-				}
 			case ANY:
 			addthread:
-				addthread(prog->insts, plist, gen, nlist, pc, sub, s, sp+l);
-				break;
+				addthread(2, nlist, npc, nsub, sp+l, continue)
 			case CLASS:
-				if (!re_classmatch(pc, sp)) {
-					decref(sub);
+				if (!re_classmatch(npc, sp))
 					break;
-				}
-				pc += *(pc+1) * 2 + 2;
+				npc += *(npc+1) * 2 + 2;
 				goto addthread;
 			case NAMEDCLASS:
-				if (!re_namedclassmatch(pc, sp)) {
-					decref(sub);
+				if (!re_namedclassmatch(npc, sp))
 					break;
-				}
-				pc++;
+				npc++;
 				goto addthread;
 			case MATCH:
-				if(matched)
-					decref(matched);
-				matched = sub;
+				matched = nsub;
 				for(i++; i < clist->n; i++)
-					decref(clist->t[i].sub);
+					clist->t[i].sub->ref--;
 				goto BreakFor;
 			}
+			nsub->ref--;
 		}
 	BreakFor:
 		tmp = clist;
@@ -664,7 +636,6 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 	if(matched) {
 		for(i=0; i<nsubp; i++)
 			subp[i] = matched->sub[i];
-		decref(matched);
 		return 1;
 	}
 	return 0;
@@ -679,21 +650,24 @@ int main(int argc, char *argv[])
 	int sz = re_sizecode(argv[1]) * sizeof(int);
 	printf("Precalculated size: %d\n", sz);
 	char code[sizeof(rcode)+sz];
-	rcode *_code = (rcode*)&code;
+	rcode *_code = (rcode*)code;
 	if (re_comp(_code, argv[1], 0))
 		re_fatal("Error in re_comp");
 	re_dumpcode(_code);
+	#include <time.h>
 	if (argc > 2) {
 		int sub_els = (_code->sub + 1) * 2;
 		const char *sub[sub_els];
 		for (int i = 2; i < argc; i++) {
-			printf("sub depth %d\n", subidx);
 			printf("input bytelen: %d\n", strlen(argv[i]));
+			clock_t start_time = clock();
 			if(!re_pikevm(_code, argv[i], sub, sub_els))
 				{ printf("-nomatch-\n"); continue; }
 			for(int k=sub_els; k>0; k--)
 				if(sub[k-1])
 					break;
+			double elapsed_time = (double)(clock() - start_time) / CLOCKS_PER_SEC;
+			printf("Done in %f seconds\n", elapsed_time);
 			for(int l=0; l<sub_els; l+=2) {
 				printf("(");
 				if(sub[l] == NULL)
@@ -709,7 +683,6 @@ int main(int argc, char *argv[])
 			}
 			printf("\n");
 		}
-		
 	}
 	return 0;
 }
