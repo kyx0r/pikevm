@@ -464,9 +464,10 @@ int re_comp(rcode *prog, const char *re, int anchored)
 	return RE_SUCCESS;
 }
 
-#define addthread(nn, list, _pc, _sub, _sp, cont) \
+#define addthread(nn, list, _pc, _sub, cont) \
 { \
 	int i = 0, j, *pc = _pc; \
+	const char *_sp = sp+l; \
 	rsub *s1, *sub = _sub; \
 	rec##nn: \
 	if(plist[pc - prog->insts] == gen) { \
@@ -524,7 +525,7 @@ int re_comp(rcode *prog, const char *re, int anchored)
 			goto rec_check##nn; \
 		pc++; goto rec##nn; \
 	case EOL: \
-		if(*(_sp)) \
+		if(*_sp) \
 			goto rec_check##nn; \
 		pc++; goto rec##nn; \
 	} \
@@ -532,8 +533,8 @@ int re_comp(rcode *prog, const char *re, int anchored)
 
 int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 {
-	int i, c, l, *npc, gen = 1, subidx = 1;
-	const char *sp;
+	int i, c, l = 0, *npc, gen = 1, subidx = 1;
+	const char *sp = s;
 	rsub nsubs[256];
 	int plist[prog->unilen];
 	int *pcs[prog->splits];
@@ -554,10 +555,8 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 
 	gen = 1;
 	while (1)
-		addthread(1, clist, prog->insts, nsub, s, break)
-	for(sp=s;; sp += l) {
-		if(clist->n == 0)
-			break;
+		addthread(1, clist, prog->insts, nsub, break)
+	for(; clist->n; sp += l) {
 		gen++; uc_len(l, sp)
 		for(i=0; i<clist->n; i++) {
 			npc = clist->t[i].pc;
@@ -575,7 +574,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 					break;
 			case ANY:
 			addthread:
-				addthread(2, nlist, npc, nsub, sp+l, continue)
+				addthread(2, nlist, npc, nsub, continue)
 			case CLASS:
 				if (!re_classmatch(npc, sp))
 					break;
