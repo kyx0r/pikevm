@@ -16,12 +16,7 @@ Why?
 ====
 Pikevm guarantees that any input regex will scale O(n) with the size of the
 string, thus making it the fastest regex implementation. There is no backtracking
-that usually expodes to O(n^2). My goals were to explore this code and try
-to use in my text editor, but after closer analysis pike performs roughly
-3 times slower on small strings than traditional well optimized backtrack
-engine. The cost of addthread is not exactly O(1) so it results in many 
-extra operations since every character is processed in lockstep. There is
-also a problem of submatch tracking that grows memory usage.
+that usually expodes to O(n^k) time and space where k is some constant.
 
 Features
 ========
