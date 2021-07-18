@@ -290,7 +290,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			break;
 		case '{':;
 			int maxcnt = 0, mincnt = 0,
-			i = 0, icnt = 1, size, split;
+			i = 0, icnt = 0, size, split;
 			re++;
 			while (isdigit((unsigned char) *re))
 				mincnt = mincnt * 10 + *re++ - '0';
@@ -319,13 +319,15 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			}
 			if (code) {
 				for (i = 0; i < size; i++)
-					switch (code[term]) {
+					switch (code[term+i]) {
 					case CLASS:
+						i += code[term+i+2] * 2 + 1;
 					case JMP:
 					case SPLIT:
 					case RSPLIT:
 					case SAVE:
 					case CHAR:
+						i++;
 						icnt++;	
 					}
 			}
