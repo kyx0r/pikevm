@@ -585,6 +585,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 				goto addthread;
 			case MATCH:
 				matched = nsub;
+				subidx = 0;
 				goto BreakFor;
 			}
 			nsub->ref--;

@@ -46,6 +46,9 @@ b[^c]*
 called|chief|dust|familiar|forth|waif|campaign|divers|smile|notice|kill|human|stands|nightshade|dollar|doughty|gloaming|twist|July|officers|wrest|coop|one|ability|welcome|significance|writer|spring|it's|helped|set|Paris|from|coomb|stay|hummock|taken|anon|makes|boat|nearly|am|justice|further|expression|contemporary|sooth|order|about|question|lived|apply|educational|of|night|satisfy|opened|never|success|until|visit|promise|parts|beneath|matter|typical|bade|apartment|rapidly|primary|bring|throat|hold|laws|understand|trade|desire|material|evidence|another|often|plash|model|someone|bond|hell|relationship|probably|exercise|performance|wants|known|countries|gammer|leeward|took|itself|representative|objection|aircraft
 abc+h+d+f
 ([0-9]|abc){5}[0-9]+(grh)
+[A-Fa-f0-9]{64}
+<tag>[^<]*</tag>
+^([a-z0-9_.-]+)@([0-9a-z.-]+)\\\\.([a-z.]{2,5})$
 "
 input="\
 abcdef
@@ -93,6 +96,9 @@ aaaabcdefghij
 hhfd h23  performance
 abcccccccccccchdf
 344444442344grhhhsdfg
+bf33d4a0dbbee85061531c9d47e5aae692c0729e5c9c1fa21c46d9bcab5f52c5
+ajdas <tag> sidufisudf hsdfhshdfh sdf </tag> asjdfjs
+veloval596@godpeed.com
 "
 expect="\
 (0,3)
@@ -140,6 +146,9 @@ expect="\
 (10,21)
 (0,17)
 (0,15)(4,5)(12,15)
+(0,64)
+(6,44)
+(0,22)(0,10)(11,18)(19,22)
 (0,0)
 "
 c=1
