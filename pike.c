@@ -516,6 +516,7 @@ int re_comp(rcode *prog, const char *re, int anchored)
 			freedsub##nn: \
 			for (j = 0; j < nsubp; j++) \
 				s1->sub[j] = sub->sub[j]; \
+			sub->ref--; \
 			sub = s1; \
 			sub->ref = 1; \
 		} \
@@ -583,11 +584,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 				npc += *(npc+1) * 2 + 2;
 				goto addthread;
 			case MATCH:
-				if (matched)
-					matched->ref = 0;
 				matched = nsub;
-				for(i++; i < clist->n; i++)
-					clist->t[i].sub->ref = 0;
 				goto BreakFor;
 			}
 			nsub->ref--;

@@ -147,6 +147,9 @@ echo "$regex" | tr '\n' | while read re; do
 	inp=$(echo "$input" | awk -v c=$c 'BEGIN{ RS = "" ; FS = "\n" }{print $c}')
 	exp=$(echo "$expect" | awk -v c=$c 'BEGIN{ RS = "" ; FS = "\n" }{print $c}')
 	var=$(./a.out "$re" "$inp")
+	if [ "$1" ]; then
+	echo "$var"
+	fi
 	var1=$(echo "$var" | tail -1)
 	if [ ! "$exp" = "$var1" ]; then
 		echo "fail test$c regex:$re input:$inp expect:$exp output:$var1"
