@@ -47,6 +47,19 @@ else if (~dst & 0x08) \
 else \
 	dst = 0; \
 
+static int isword(const char *s)
+{
+	int c = (unsigned char) s[0];
+	return isalnum(c) || c == '_' || c > 127;
+}
+
+static char *uc_beg(char *beg, char *s)
+{
+	while (s > beg && (((unsigned char) *s) & 0xc0) == 0x80)
+		s--;
+	return s;
+}
+
 typedef struct rinst rinst;
 struct rinst
 {
@@ -84,6 +97,7 @@ enum	/* rinst.opcode */
 	ASSERT,
 	BOL,
 	EOL,
+	WBND,
 	// Instructions which take relative offset as arg
 	JMP,
 	SPLIT,
@@ -196,7 +210,13 @@ void re_dumpcode(rcode *prog)
 			printf("save %d\n", code[pc++]);
 			break;
 		case ASSERT:
-			printf("assert %s\n", code[pc++] == BOL ? "bol" : "eol");
+			if (code[pc] == BOL)
+				printf("assert bol\n");
+			else if (code[pc] == EOL)
+				printf("assert eol\n");
+			else if (code[pc] == WBND)
+				printf("assert WBND\n");
+			pc++;
 			break;
 		}
 	}
@@ -215,6 +235,13 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 		case '\\':
 			re++;
 			if (!*re) goto syntax_error; // Trailing backslash
+			if (*re == 'b') {
+				EMIT(PC++, ASSERT);
+				EMIT(PC++, WBND);
+				prog->len++;
+				term = PC;
+				break;
+			} 
 		default:
 			term = PC;
 			EMIT(PC++, CHAR);
@@ -528,6 +555,8 @@ int re_comp(rcode *prog, const char *re, int anchored)
 		if(*pc == BOL && _sp != s) \
 			goto rec_check##nn; \
 		if(*pc == EOL && *_sp) \
+			goto rec_check##nn; \
+		if(*pc == WBND && isword(sp)) \
 			goto rec_check##nn; \
 		pc++; goto rec##nn; \
 	} \

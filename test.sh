@@ -49,6 +49,9 @@ abc+h+d+f
 [A-Fa-f0-9]{64}
 <tag>[^<]*</tag>
 ^([a-z0-9_.-]+)@([0-9a-z.-]+)\\\\.([a-z.]{2,5})$
+\\\\babc
+ab\\\\bd
+\\\\b(as|js)
 "
 input="\
 abcdef
@@ -99,6 +102,9 @@ abcccccccccccchdf
 bf33d4a0dbbee85061531c9d47e5aae692c0729e5c9c1fa21c46d9bcab5f52c5
 ajdas <tag> sidufisudf hsdfhshdfh sdf </tag> asjdfjs
 veloval596@godpeed.com
+   	   abc
+ab   d
+     js hashasd
 "
 expect="\
 (0,3)
@@ -149,6 +155,9 @@ expect="\
 (0,64)
 (6,44)
 (0,22)(0,10)(11,18)(19,22)
+(7,10)
+-nomatch-
+(5,7)(5,7)
 (0,0)
 "
 c=1
