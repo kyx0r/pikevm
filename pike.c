@@ -19,14 +19,14 @@ const unsigned char utf8_length[256] = {
 	/* 5 */ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
 	/* 6 */ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
 	/* 7 */ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-	/* 8 */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	/* 9 */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	/* A */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	/* B */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	/* C */ 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+	/* 8 */ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	/* 9 */ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	/* A */ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	/* B */ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	/* C */ 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
 	/* D */ 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
 	/* E */ 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-	/* F */ 4, 4, 4, 4, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+	/* F */ 4, 4, 4, 4, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
 };
 
 /* return the length of a utf-8 character */
@@ -81,6 +81,7 @@ enum	/* rinst.opcode */
 	ANY,
 	CLASS,
 	// Assert position
+	ASSERT,
 	BOL,
 	EOL,
 	// Instructions which take relative offset as arg
@@ -100,7 +101,7 @@ enum {
 	RE_UNSUPPORTED_SYNTAX = -4,
 };
 
-#define inst_is_consumer(inst) ((inst) < BOL)
+#define inst_is_consumer(inst) ((inst) < ASSERT)
 typedef struct rsub rsub;
 struct rsub
 {
@@ -194,11 +195,8 @@ void re_dumpcode(rcode *prog)
 		case SAVE:
 			printf("save %d\n", code[pc++]);
 			break;
-		case BOL:
-			printf("assert bol\n");
-			break;
-		case EOL:
-			printf("assert eol\n");
+		case ASSERT:
+			printf("assert %s\n", code[pc++] == BOL ? "bol" : "eol");
 			break;
 		}
 	}
@@ -392,11 +390,13 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			term = PC;
 			break;
 		case '^':
+			EMIT(PC++, ASSERT);
 			EMIT(PC++, BOL);
 			prog->len++;
 			term = PC;
 			break;
 		case '$':
+			EMIT(PC++, ASSERT);
 			EMIT(PC++, EOL);
 			prog->len++;
 			term = PC;
@@ -523,12 +523,11 @@ int re_comp(rcode *prog, const char *re, int anchored)
 		sub->sub[pc[1]] = _sp; \
 		pc += 2; \
 		goto rec##nn; \
-	case BOL: \
-		if(_sp != s) \
+	case ASSERT: \
+		pc++; \
+		if(*pc == BOL && _sp != s) \
 			goto rec_check##nn; \
-		pc++; goto rec##nn; \
-	case EOL: \
-		if(*_sp) \
+		if(*pc == EOL && *_sp) \
 			goto rec_check##nn; \
 		pc++; goto rec##nn; \
 	} \
@@ -564,12 +563,10 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 		for(i=0; i<clist->n; i++) {
 			npc = clist->t[i].pc;
 			nsub = clist->t[i].sub;
-			if (inst_is_consumer(*npc) && !*sp) {
-				// If we need to match a character, but there's none left,
-				// it's fail (we don't schedule current thread for continuation)
-				nsub->ref--;
+			// If we need to match a character, but there's none left,
+			// it's fail (we don't schedule current thread for continuation)
+			if (inst_is_consumer(*npc) && !*sp)
 				continue;
-			}
 			switch(*npc++) {
 			case CHAR:
 				uc_code(c, sp)
