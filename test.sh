@@ -49,9 +49,18 @@ abc+h+d+f
 [A-Fa-f0-9]{64}
 <tag>[^<]*</tag>
 ^([a-z0-9_.-]+)@([0-9a-z.-]+)\\\\.([a-z.]{2,5})$
+abc\$d
+abc$|cdb
+abc$|c
+^ac|cdb
+^abc+d
+^(abc|kj)
+^(abc|kj)
 \\\\babc
 ab\\\\bd
 \\\\b(as|js)
+([^qwe]*rty)|(asd[^fgh]*)
+([^qwe]*rty+)|(asd[^fgh]*)
 "
 input="\
 abcdef
@@ -102,9 +111,18 @@ abcccccccccccchdf
 bf33d4a0dbbee85061531c9d47e5aae692c0729e5c9c1fa21c46d9bcab5f52c5
 ajdas <tag> sidufisudf hsdfhshdfh sdf </tag> asjdfjs
 veloval596@godpeed.com
+abc
+abccdb
+abcc
+abccdb
+abccdb
+kj
+jhdfh kj hhd
    	   abc
 ab   d
      js hashasd
+qweasd     qqqq fff
+qwehh  sjsjsj rtyyyyyyyyyj sdj
 "
 expect="\
 (0,3)
@@ -155,9 +173,18 @@ expect="\
 (0,64)
 (6,44)
 (0,22)(0,10)(11,18)(19,22)
+-nomatch-
+(3,6)
+(2,3)
+(3,6)
+(0,5)
+(0,2)(0,2)
+-nomatch-
 (7,10)
 -nomatch-
 (5,7)(5,7)
+(3,16)(?,?)(3,16)
+(3,25)(3,25)(?,?)
 (0,0)
 "
 c=1

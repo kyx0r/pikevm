@@ -458,28 +458,13 @@ int re_sizecode(const char *re)
 	return dummyprog.unilen;
 }
 
-int re_comp(rcode *prog, const char *re, int anchored)
+int re_comp(rcode *prog, const char *re)
 {
 	prog->len = 0;
 	prog->unilen = 0;
 	prog->sub = 0;
 	prog->splits = 0;
 
-	// Add code to implement non-anchored operation ("search").
-	// For anchored operation ("match"), this code will be just skipped.
-	// TODO: Implement search in much more efficient manner
-	if (!anchored) {
-		prog->insts[prog->unilen++] = RSPLIT;
-		prog->insts[prog->unilen++] = 3;
-		prog->insts[prog->unilen++] = ANY;
-		prog->insts[prog->unilen++] = JMP;
-		prog->insts[prog->unilen++] = -5;
-	
-		prog->insts[prog->unilen++] = SAVE;
-		prog->insts[prog->unilen++] = 0;
-		prog->len += 4;
-		prog->splits++;
-	}
 	int res = _compilecode(&re, prog, /*sizecode*/0);
 	if (res < 0) return res;
 	// If unparsed chars left
@@ -493,11 +478,28 @@ int re_comp(rcode *prog, const char *re, int anchored)
 	return RE_SUCCESS;
 }
 
+#define save(nn, csub) \
+if (csub->ref > 1) { \
+	for (j = 0; j < subidx; j++) { \
+		if (!nsubs[j].ref) { \
+			s1 = &nsubs[j]; \
+			goto freedsub##nn; \
+		} \
+	} \
+	s1 = &nsubs[subidx++]; \
+	freedsub##nn: \
+	for (j = 0; j < nsubp; j++) \
+		s1->sub[j] = csub->sub[j]; \
+	csub->ref--; \
+	csub = s1; \
+	csub->ref = 1; \
+} \
+
 #define addthread(nn, list, _pc, _sub, cont) \
 { \
-	int i = 0, j, *pc = _pc; \
+	int i = 0, *pc = _pc; \
 	const char *_sp = sp+l; \
-	rsub *s1, *sub = _sub; \
+	rsub *sub = _sub; \
 	rec##nn: \
 	if(plist[pc - prog->insts] == gen) { \
 		sub->ref--; \
@@ -532,21 +534,7 @@ int re_comp(rcode *prog, const char *re, int anchored)
 		pc += pc[-1]; \
 		goto rec##nn; \
 	case SAVE: \
-		if (sub->ref > 1) { \
-			for (j = 0; j < subidx; j++) { \
-				if (!nsubs[j].ref) { \
-					s1 = &nsubs[j]; \
-					goto freedsub##nn; \
-				} \
-			} \
-			s1 = &nsubs[subidx++]; \
-			freedsub##nn: \
-			for (j = 0; j < nsubp; j++) \
-				s1->sub[j] = sub->sub[j]; \
-			sub->ref--; \
-			sub = s1; \
-			sub->ref = 1; \
-		} \
+		save(nn, sub) \
 		sub->sub[pc[1]] = _sp; \
 		pc += 2; \
 		goto rec##nn; \
@@ -562,22 +550,27 @@ int re_comp(rcode *prog, const char *re, int anchored)
 	} \
 } \
 
+#define swaplist() \
+tmp = clist; \
+clist = nlist; \
+nlist = tmp; \
+nlist->n = 0; \
+
 int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 {
-	int i, c, l = 0, *npc, gen = 1, subidx = 1;
+	int i, j, c, l = 0, *npc, gen = 1, subidx = 1;
 	const char *sp = s;
 	rsub nsubs[256];
 	int plist[prog->unilen];
 	int *pcs[prog->splits];
 	rsub *subs[prog->splits];
-	rsub *nsub = nsubs, *matched = NULL;
+	rsub *nsub = nsubs, *lsub = nsub, *matched = NULL, *s1;
 	rthreadlist _clist[1+prog->len]; 
 	rthreadlist _nlist[1+prog->len]; 
 	rthreadlist *clist = _clist, *nlist = _nlist, *tmp;
 	memset(plist, 0, prog->unilen*sizeof(plist[0]));
 	memset(clist, 0, (1+prog->len)*sizeof(rthread));
 	memset(nlist, 0, (1+prog->len)*sizeof(rthread));
-	nsub->ref = 1;
 
 	for(i=0; i<nsubp; i++) {
 		subp[i] = NULL;
@@ -585,8 +578,10 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 	}
 
 	gen = 1;
-	while (1)
-		addthread(1, clist, prog->insts, nsub, break)
+	nsub->ref = 2;
+	save(0, nsub);
+	nsub->sub[0] = sp;
+	goto jmp_start;
 	for(; clist->n; sp += l) {
 		gen++; uc_len(l, sp)
 		for(i=0; i<clist->n; i++) {
@@ -594,8 +589,11 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 			nsub = clist->t[i].sub;
 			// If we need to match a character, but there's none left,
 			// it's fail (we don't schedule current thread for continuation)
-			if (inst_is_consumer(*npc) && !*sp)
+			if (inst_is_consumer(*npc) && !*sp) {
+				if (i >= clist->n-1)
+					goto BreakFor;
 				continue;
+			}
 			switch(*npc++) {
 			case CHAR:
 				uc_code(c, sp)
@@ -616,11 +614,19 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 			}
 			nsub->ref--;
 		}
+		if (!matched) {
+			nsub = lsub;
+			nsub->ref++;
+			save(3, nsub)
+			nsub->sub[0] = sp + l;
+			swaplist()
+			jmp_start:
+			while (1)
+				addthread(1, clist, prog->insts, nsub, break)
+			continue;
+		}
 	BreakFor:
-		tmp = clist;
-		clist = nlist;
-		nlist = tmp;
-		nlist->n = 0;
+		swaplist()
 	}
 	if(matched) {
 		for(i=0; i<nsubp; i++)
@@ -640,7 +646,7 @@ int main(int argc, char *argv[])
 	printf("Precalculated size: %d\n", sz);
 	char code[sizeof(rcode)+sz];
 	rcode *_code = (rcode*)code;
-	if (re_comp(_code, argv[1], 0))
+	if (re_comp(_code, argv[1]))
 		re_fatal("Error in re_comp");
 	re_dumpcode(_code);
 	#include <time.h>
