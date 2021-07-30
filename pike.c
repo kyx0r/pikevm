@@ -444,9 +444,7 @@ int re_comp(rcode *prog, const char *re)
 	prog->insts[prog->unilen++] = SAVE;
 	prog->insts[prog->unilen++] = 1;
 	prog->insts[prog->unilen++] = MATCH;
-	prog->insts[prog->unilen++] = CHAR;
-	prog->insts[prog->unilen++] = 0;
-	prog->len += 3;
+	prog->len += 2;
 
 	return RE_SUCCESS;
 }
@@ -565,8 +563,6 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 					break;
 			case ANY:
 			addthread:
-				if (!c)
-					continue;
 				addthread(2, nlist, npc, nsub, continue)
 			case CLASS:
 				if (!re_classmatch(npc, c))
@@ -580,7 +576,10 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 			}
 			nsub->ref--;
 		}
-		if (!matched && c) {
+		break_for:
+		if (!c)
+			break;
+		if (!matched) {
 			nsub = lsub;
 			nsub->ref++;
 			save(3, nsub)
@@ -591,7 +590,6 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 				addthread(1, clist, prog->insts, nsub, break)
 			continue;
 		}
-	break_for:
 		swaplist()
 	}
 	if(matched) {
@@ -622,13 +620,14 @@ int main(int argc, char *argv[])
 		for (int i = 2; i < argc; i++) {
 			printf("input bytelen: %d\n", strlen(argv[i]));
 			clock_t start_time = clock();
-			if(!re_pikevm(_code, argv[i], sub, sub_els))
+			sz = re_pikevm(_code, argv[i], sub, sub_els);
+			double elapsed_time = (double)(clock() - start_time) / CLOCKS_PER_SEC;
+			printf("Done in %f seconds\n", elapsed_time);
+			if (!sz)
 				{ printf("-nomatch-\n"); continue; }
 			for(int k=sub_els; k>0; k--)
 				if(sub[k-1])
 					break;
-			double elapsed_time = (double)(clock() - start_time) / CLOCKS_PER_SEC;
-			printf("Done in %f seconds\n", elapsed_time);
 			for(int l=0; l<sub_els; l+=2) {
 				printf("(");
 				if(sub[l] == NULL)
