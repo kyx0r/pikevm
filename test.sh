@@ -56,9 +56,6 @@ abc$|c
 ^abc+d
 ^(abc|kj)
 ^(abc|kj)
-\\\\babc
-ab\\\\bd
-\\\\b(as|js)
 ([^qwe]*rty)|(asd[^fgh]*)
 ([^qwe]*rty+)|(asd[^fgh]*)
 "
@@ -118,9 +115,6 @@ abccdb
 abccdb
 kj
 jhdfh kj hhd
-   	   abc
-ab   d
-     js hashasd
 qweasd     qqqq fff
 qwehh  sjsjsj rtyyyyyyyyyj sdj
 "
@@ -180,9 +174,6 @@ expect="\
 (0,5)
 (0,2)(0,2)
 -nomatch-
-(7,10)
--nomatch-
-(5,7)(5,7)
 (3,16)(?,?)(3,16)
 (3,25)(3,25)(?,?)
 (0,0)

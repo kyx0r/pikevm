@@ -97,7 +97,6 @@ enum	/* rinst.opcode */
 	ASSERT,
 	BOL,
 	EOL,
-	WBND,
 	// Instructions which take relative offset as arg
 	JMP,
 	SPLIT,
@@ -151,12 +150,11 @@ void re_fatal(char *msg)
 	exit(2);
 }
 
-int re_classmatch(const int *pc, const char *sp)
+int re_classmatch(const int *pc, int c)
 {
 	// pc points to "classnot" byte after opcode
 	int is_positive = *pc++;
-	int cnt = *pc++, c;
-	uc_code(c, sp)
+	int cnt = *pc++;
 	while (cnt--) {
 		if (c >= *pc && c <= pc[1]) return is_positive;
 		pc += 2;
@@ -214,8 +212,6 @@ void re_dumpcode(rcode *prog)
 				printf("assert bol\n");
 			else if (code[pc] == EOL)
 				printf("assert eol\n");
-			else if (code[pc] == WBND)
-				printf("assert WBND\n");
 			pc++;
 			break;
 		}
@@ -235,13 +231,6 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 		case '\\':
 			re++;
 			if (!*re) goto syntax_error; // Trailing backslash
-			if (*re == 'b') {
-				EMIT(PC++, ASSERT);
-				EMIT(PC++, WBND);
-				prog->len++;
-				term = PC;
-				break;
-			} 
 		default:
 			term = PC;
 			EMIT(PC++, CHAR);
@@ -544,8 +533,6 @@ if (csub->ref > 1) { \
 			goto rec_check##nn; \
 		if(*pc == EOL && *_sp) \
 			goto rec_check##nn; \
-		if(*pc == WBND && isword(sp)) \
-			goto rec_check##nn; \
 		pc++; goto rec##nn; \
 	} \
 } \
@@ -583,7 +570,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 	nsub->sub[0] = sp;
 	goto jmp_start;
 	for(; clist->n; sp += l) {
-		gen++; uc_len(l, sp)
+		gen++; uc_len(l, sp) uc_code(c, sp)
 		for(i=0; i<clist->n; i++) {
 			npc = clist->t[i].pc;
 			nsub = clist->t[i].sub;
@@ -591,26 +578,25 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 			// it's fail (we don't schedule current thread for continuation)
 			if (inst_is_consumer(*npc) && !*sp) {
 				if (i >= clist->n-1)
-					goto BreakFor;
+					goto break_for;
 				continue;
 			}
 			switch(*npc++) {
 			case CHAR:
-				uc_code(c, sp)
 				if(c != *npc++)
 					break;
 			case ANY:
 			addthread:
 				addthread(2, nlist, npc, nsub, continue)
 			case CLASS:
-				if (!re_classmatch(npc, sp))
+				if (!re_classmatch(npc, c))
 					break;
 				npc += *(npc+1) * 2 + 2;
 				goto addthread;
 			case MATCH:
 				matched = nsub;
 				subidx = 0;
-				goto BreakFor;
+				goto break_for;
 			}
 			nsub->ref--;
 		}
@@ -625,7 +611,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 				addthread(1, clist, prog->insts, nsub, break)
 			continue;
 		}
-	BreakFor:
+	break_for:
 		swaplist()
 	}
 	if(matched) {
