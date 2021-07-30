@@ -449,7 +449,7 @@ int re_comp(rcode *prog, const char *re)
 	return RE_SUCCESS;
 }
 
-#define save(nn, csub) \
+#define newsub(csub) \
 if (csub->ref > 1) { \
 	s1 = freesub; \
 	if (s1) \
@@ -509,7 +509,7 @@ if (--csub->ref == 0) { \
 		pc += pc[-1]; \
 		goto rec##nn; \
 	case SAVE: \
-		save(nn, sub) \
+		newsub(sub) \
 		sub->sub[pc[1]] = _sp; \
 		pc += 2; \
 		goto rec##nn; \
@@ -553,7 +553,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 
 	gen = 1;
 	nsub->ref = 2;
-	save(0, nsub);
+	newsub(nsub);
 	nsub->sub[0] = sp;
 	goto jmp_start;
 	for(; clist->n; sp += l) {
@@ -586,7 +586,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 		if (!matched) {
 			nsub = lsub;
 			nsub->ref++;
-			save(3, nsub)
+			newsub(nsub)
 			nsub->sub[0] = sp + l;
 			swaplist()
 			jmp_start:
