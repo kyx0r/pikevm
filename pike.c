@@ -60,23 +60,6 @@ static char *uc_beg(char *beg, char *s)
 	return s;
 }
 
-typedef struct rinst rinst;
-struct rinst
-{
-	int opcode;
-	int c;
-	int n;
-	rinst *x;
-	rinst *y;
-};
-
-typedef struct rprog rprog;
-struct rprog
-{
-	rinst *start;
-	int len;
-};
-
 typedef struct rcode rcode;
 struct rcode
 {
@@ -87,12 +70,13 @@ struct rcode
 	int insts[];
 };
 
-enum	/* rinst.opcode */
+enum
 {
 	// Instructions which consume input bytes (and thus fail if none left)
 	CHAR = 1,
 	ANY,
 	CLASS,
+	MATCH,
 	// Assert position
 	ASSERT,
 	BOL,
@@ -103,7 +87,6 @@ enum	/* rinst.opcode */
 	RSPLIT,
 	// Other (special) instructions
 	SAVE,
-	MATCH,
 };
 
 // Return codes for re_sizecode() and re_comp()
@@ -114,7 +97,6 @@ enum {
 	RE_UNSUPPORTED_SYNTAX = -4,
 };
 
-#define inst_is_consumer(inst) ((inst) < ASSERT)
 typedef struct rsub rsub;
 struct rsub
 {
@@ -462,7 +444,9 @@ int re_comp(rcode *prog, const char *re)
 	prog->insts[prog->unilen++] = SAVE;
 	prog->insts[prog->unilen++] = 1;
 	prog->insts[prog->unilen++] = MATCH;
-	prog->len += 2;
+	prog->insts[prog->unilen++] = CHAR;
+	prog->insts[prog->unilen++] = 0;
+	prog->len += 3;
 
 	return RE_SUCCESS;
 }
@@ -501,11 +485,12 @@ if (csub->ref > 1) { \
 		cont; \
 	} \
 	plist[pc - prog->insts] = gen; \
-	switch(*pc) { \
-	default: \
+	if (*pc < ASSERT) { \
 		list->t[list->n].sub = sub; \
 		list->t[list->n++].pc = pc; \
 		goto rec_check##nn; \
+	} \
+	switch(*pc) { \
 	case JMP: \
 		pc += 2 + pc[1]; \
 		goto rec##nn; \
@@ -574,19 +559,14 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 		for(i=0; i<clist->n; i++) {
 			npc = clist->t[i].pc;
 			nsub = clist->t[i].sub;
-			// If we need to match a character, but there's none left,
-			// it's fail (we don't schedule current thread for continuation)
-			if (inst_is_consumer(*npc) && !*sp) {
-				if (i >= clist->n-1)
-					goto break_for;
-				continue;
-			}
 			switch(*npc++) {
 			case CHAR:
 				if(c != *npc++)
 					break;
 			case ANY:
 			addthread:
+				if (!c)
+					continue;
 				addthread(2, nlist, npc, nsub, continue)
 			case CLASS:
 				if (!re_classmatch(npc, c))
@@ -600,7 +580,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 			}
 			nsub->ref--;
 		}
-		if (!matched) {
+		if (!matched && c) {
 			nsub = lsub;
 			nsub->ref++;
 			save(3, nsub)
