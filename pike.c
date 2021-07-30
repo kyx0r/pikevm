@@ -451,19 +451,22 @@ int re_comp(rcode *prog, const char *re)
 
 #define save(nn, csub) \
 if (csub->ref > 1) { \
-	for (j = 0; j < subidx; j++) { \
-		if (!nsubs[j].ref) { \
-			s1 = &nsubs[j]; \
-			goto freedsub##nn; \
-		} \
-	} \
-	s1 = &nsubs[subidx++]; \
-	freedsub##nn: \
+	s1 = freesub; \
+	if (s1) \
+		freesub = (rsub*)s1->sub[0]; \
+	else \
+		s1 = &nsubs[subidx++]; \
 	for (j = 0; j < nsubp; j++) \
 		s1->sub[j] = csub->sub[j]; \
 	csub->ref--; \
 	csub = s1; \
 	csub->ref = 1; \
+} \
+
+#define decref(csub) \
+if (--csub->ref == 0) { \
+	csub->sub[0] = (char*)freesub; \
+	freesub = csub; \
 } \
 
 #define addthread(nn, list, _pc, _sub, cont) \
@@ -473,7 +476,7 @@ if (csub->ref > 1) { \
 	rsub *sub = _sub; \
 	rec##nn: \
 	if(plist[pc - prog->insts] == gen) { \
-		sub->ref--; \
+		decref(sub) \
 		rec_check##nn: \
 		if (i) { \
 			pc = pcs[--i]; \
@@ -535,6 +538,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 	int *pcs[prog->splits];
 	rsub *subs[prog->splits];
 	rsub *nsub = nsubs, *lsub = nsub, *matched = NULL, *s1;
+	rsub *freesub = NULL;
 	rthreadlist _clist[1+prog->len]; 
 	rthreadlist _nlist[1+prog->len]; 
 	rthreadlist *clist = _clist, *nlist = _nlist, *tmp;
@@ -574,7 +578,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 				subidx = 0;
 				goto break_for;
 			}
-			nsub->ref--;
+			decref(nsub)
 		}
 		break_for:
 		if (!c)
