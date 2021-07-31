@@ -58,6 +58,7 @@ abc$|c
 ^(abc|kj)
 ([^qwe]*rty)|(asd[^fgh]*)
 ([^qwe]*rty+)|(asd[^fgh]*)
+((abc))(fv)
 "
 input="\
 abcdef
@@ -117,6 +118,7 @@ kj
 jhdfh kj hhd
 qweasd     qqqq fff
 qwehh  sjsjsj rtyyyyyyyyyj sdj
+abcfv
 "
 expect="\
 (0,3)
@@ -176,6 +178,7 @@ expect="\
 -nomatch-
 (3,16)(?,?)(3,16)
 (3,25)(3,25)(?,?)
+(0,5)(0,3)(0,3)(3,5)
 (0,0)
 "
 c=1

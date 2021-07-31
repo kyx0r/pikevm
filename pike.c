@@ -111,13 +111,6 @@ struct rthread
 	rsub *sub;
 };
 
-typedef struct rthreadlist rthreadlist;
-struct rthreadlist
-{
-	int n;
-	rthread t[1];
-};
-
 #define INSERT_CODE(at, num, pc) \
 if (code) \
 	memmove(code + at + num, code + at, (pc - at)*sizeof(int)); \
@@ -469,7 +462,7 @@ if (--csub->ref == 0) { \
 	freesub = csub; \
 } \
 
-#define addthread(nn, list, _pc, _sub, cont) \
+#define addthread(nn, list, listidx, _pc, _sub, cont) \
 { \
 	int i = 0, *pc = _pc; \
 	const char *_sp = sp+l; \
@@ -487,8 +480,8 @@ if (--csub->ref == 0) { \
 	} \
 	plist[pc - prog->insts] = gen; \
 	if (*pc < ASSERT) { \
-		list->t[list->n].sub = sub; \
-		list->t[list->n++].pc = pc; \
+		list[listidx].sub = sub; \
+		list[listidx++].pc = pc; \
 		goto rec_check##nn; \
 	} \
 	switch(*pc) { \
@@ -527,12 +520,14 @@ if (--csub->ref == 0) { \
 tmp = clist; \
 clist = nlist; \
 nlist = tmp; \
-nlist->n = 0; \
+clistidx = nlistidx; \
+nlistidx = 0; \
 
 int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 {
 	int i, j, c, l = 0, *npc, gen = 1, subidx = 1;
 	int rsubsize = sizeof(rsub)+(sizeof(char*)*nsubp);
+	int clistidx = 0, nlistidx = 0;
 	const char *sp = s;
 	int plist[prog->unilen];
 	int *pcs[prog->splits];
@@ -540,12 +535,10 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 	char nsubs[rsubsize*256];
 	rsub *nsub = (rsub*)nsubs, *lsub = nsub, *matched = NULL, *s1;
 	rsub *freesub = NULL;
-	rthreadlist _clist[1+prog->len]; 
-	rthreadlist _nlist[1+prog->len]; 
-	rthreadlist *clist = _clist, *nlist = _nlist, *tmp;
+	rthread _clist[prog->len]; 
+	rthread _nlist[prog->len]; 
+	rthread *clist = _clist, *nlist = _nlist, *tmp;
 	memset(plist, 0, prog->unilen*sizeof(plist[0]));
-	memset(clist, 0, (1+prog->len)*sizeof(rthread));
-	memset(nlist, 0, (1+prog->len)*sizeof(rthread));
 
 	for(i=0; i<nsubp; i++) {
 		subp[i] = NULL;
@@ -557,18 +550,18 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 	newsub(nsub);
 	nsub->sub[0] = sp;
 	goto jmp_start;
-	for(; clist->n; sp += l) {
+	for(; clistidx; sp += l) {
 		gen++; uc_len(l, sp) uc_code(c, sp)
-		for(i=0; i<clist->n; i++) {
-			npc = clist->t[i].pc;
-			nsub = clist->t[i].sub;
+		for(i = 0; i < clistidx; i++) {
+			npc = clist[i].pc;
+			nsub = clist[i].sub;
 			switch(*npc++) {
 			case CHAR:
 				if(c != *npc++)
 					break;
 			case ANY:
 			addthread:
-				addthread(2, nlist, npc, nsub, continue)
+				addthread(2, nlist, nlistidx, npc, nsub, continue)
 			case CLASS:
 				if (!re_classmatch(npc, c))
 					break;
@@ -592,7 +585,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 			swaplist()
 			jmp_start:
 			while (1)
-				addthread(1, clist, prog->insts, nsub, break)
+				addthread(1, clist, clistidx, prog->insts, nsub, break)
 			continue;
 		}
 		swaplist()
