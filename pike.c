@@ -101,7 +101,7 @@ typedef struct rsub rsub;
 struct rsub
 {
 	int ref;
-	const char *sub[128];
+	const char *sub[];
 };
 
 typedef struct rthread rthread;
@@ -455,7 +455,7 @@ if (csub->ref > 1) { \
 	if (s1) \
 		freesub = (rsub*)s1->sub[0]; \
 	else \
-		s1 = &nsubs[subidx++]; \
+		s1 = (rsub*)&nsubs[rsubsize * subidx++]; \
 	for (j = 0; j < nsubp; j++) \
 		s1->sub[j] = csub->sub[j]; \
 	csub->ref--; \
@@ -532,12 +532,13 @@ nlist->n = 0; \
 int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 {
 	int i, j, c, l = 0, *npc, gen = 1, subidx = 1;
+	int rsubsize = sizeof(rsub)+(sizeof(char*)*nsubp);
 	const char *sp = s;
-	rsub nsubs[256];
 	int plist[prog->unilen];
 	int *pcs[prog->splits];
 	rsub *subs[prog->splits];
-	rsub *nsub = nsubs, *lsub = nsub, *matched = NULL, *s1;
+	char nsubs[rsubsize*256];
+	rsub *nsub = (rsub*)nsubs, *lsub = nsub, *matched = NULL, *s1;
 	rsub *freesub = NULL;
 	rthreadlist _clist[1+prog->len]; 
 	rthreadlist _nlist[1+prog->len]; 
