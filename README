@@ -28,6 +28,8 @@ Currently the type used is int, and every atom in compiled code is aligned
 to that.
 * Matcher does not take size of string as param, it checks for '\0' instead,
 so that the user does not need to waste time taking strlen()
+* Highly optimized source code, probably 2x faster than re1.5
+* Support for named character classes: \d \D \s \S \w \W was dropped cause it's redundant.
 * Support for quoted chars in regex.
 * Support for ^, $ assertions in regex.
 * Support for repetition operator {n} and {n,m}.
@@ -43,6 +45,12 @@ dirty and I scrapped it. Syntax for word assertions are like posix C library, no
 the pcre "\b" which can be used both in front or back of the word, because there is
 no distinction, it makes the implementation potentially even uglier.
 
+NOTES
+=====
+Currently submatch tracking allocates a fix constant, however it is theoretically
+possible to compute the worst case memory usage at compile time and get rid of
+the constant. If this note remains, that means I did not find an efficient way
+to calculate the worst case.
 
 TODO
 ====
