@@ -447,19 +447,16 @@ int re_comp(rcode *prog, const char *re)
 	return RE_SUCCESS;
 }
 
-#define newsub(csub) \
-if (csub->ref > 1) { \
-	s1 = freesub; \
-	if (s1) \
-		freesub = (rsub*)s1->sub[0]; \
-	else \
-		s1 = (rsub*)&nsubs[rsubsize * subidx++]; \
-	for (j = 0; j < nsubp; j++) \
-		s1->sub[j] = csub->sub[j]; \
-	csub->ref--; \
-	csub = s1; \
-	csub->ref = 1; \
-} \
+#define newsub(n, csub) \
+s1 = freesub; \
+if (s1) \
+	freesub = (rsub*)s1->sub[0]; \
+else \
+	s1 = (rsub*)&nsubs[rsubsize * subidx++]; \
+for (j = n; j < nsubp; j++) \
+	s1->sub[j] = csub->sub[j]; \
+csub = s1; \
+csub->ref = 1; \
 
 #define decref(csub) \
 if (--csub->ref == 0) { \
@@ -509,7 +506,10 @@ if (--csub->ref == 0) { \
 		pc += pc[-1]; \
 		goto rec##nn; \
 	case SAVE: \
-		newsub(sub) \
+		if (sub->ref > 1) { \
+			sub->ref--; \
+			newsub(0, sub) \
+		} \
 		sub->sub[pc[1]] = _sp; \
 		pc += 2; \
 		goto rec##nn; \
@@ -549,13 +549,12 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 	rthread *clist = _clist, *nlist = _nlist, *tmp;
 	memset(plist, 0, prog->unilen*sizeof(plist[0]));
 
-	for(i=0; i<nsubp; i++) {
+	for(i = 0; i < nsubp; i++) {
 		subp[i] = NULL;
 		nsub->sub[i] = NULL;
 	}
 
 	gen = 1;
-	nsub->ref = 2;
 	goto jmp_start;
 	for(;; sp += l) {
 		gen++; uc_len(l, sp) uc_code(c, sp)
@@ -591,16 +590,15 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 		nlistidx = 0;
 		if (!matched) {
 			nsub = lsub;
-			nsub->ref++;
 			jmp_start:
-			newsub(nsub)
+			newsub(1, nsub)
 			nsub->sub[0] = sp + l;
 			addthread(1, clist, clistidx, insts, nsub)
 		} else if (!clistidx)
 			break;
 	}
 	if(matched) {
-		for(i=0; i<nsubp; i++)
+		for(i = 0; i < nsubp; i++)
 			subp[i] = matched->sub[i];
 		return 1;
 	}
