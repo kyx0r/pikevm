@@ -253,6 +253,8 @@ expect="\
 (4,13)(?,?)
 (0,0)
 "
+
+gcc pike.c -pedantic -Wall -Wfatal-errors -std=c99
 c=1
 echo "$regex" | tr '\n' | while read re; do
 	inp=$(echo "$input" | awk -v c=$c 'BEGIN{ RS = "" ; FS = "\n" }{print $c}')

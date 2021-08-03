@@ -53,13 +53,6 @@ static int isword(const char *s)
 	return isalnum(c) || c == '_' || c > 127;
 }
 
-static char *uc_beg(char *beg, char *s)
-{
-	while (s > beg && (((unsigned char) *s) & 0xc0) == 0x80)
-		s--;
-	return s;
-}
-
 typedef struct rcode rcode;
 struct rcode
 {
@@ -634,7 +627,7 @@ int main(int argc, char *argv[])
 		int sub_els = (_code->sub + 1) * 2;
 		const char *sub[sub_els];
 		for (int i = 2; i < argc; i++) {
-			printf("input bytelen: %d\n", strlen(argv[i]));
+			printf("input bytelen: %ld\n", strlen(argv[i]));
 			clock_t start_time = clock();
 			sz = re_pikevm(_code, argv[i], sub, sub_els);
 			double elapsed_time = (double)(clock() - start_time) / CLOCKS_PER_SEC;
