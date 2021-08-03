@@ -102,7 +102,7 @@ struct rsub
 typedef struct rthread rthread;
 struct rthread
 {
-	int *pc;
+	const int *pc;
 	rsub *sub;
 };
 
@@ -467,13 +467,14 @@ if (--csub->ref == 0) { \
 	freesub = csub; \
 } \
 
-#define addthread(nn, list, listidx, _pc, _sub, cont) \
+#define addthread(nn, list, listidx, _pc, _sub) \
 { \
-	int i = 0, *pc = _pc; \
+	int i = 0; \
+	const int *pc = _pc; \
 	const char *_sp = sp+l; \
 	rsub *sub = _sub; \
 	rec##nn: \
-	if(plist[pc - prog->insts] == gen) { \
+	if(plist[pc - insts] == gen) { \
 		dec_check##nn: \
 		decref(sub) \
 		rec_check##nn: \
@@ -482,9 +483,9 @@ if (--csub->ref == 0) { \
 			sub = subs[i]; \
 			goto rec##nn; \
 		} \
-		cont; \
+		continue; \
 	} \
-	plist[pc - prog->insts] = gen; \
+	plist[pc - insts] = gen; \
 	if (*pc < ASSERT) { \
 		list[listidx].sub = sub; \
 		list[listidx++].pc = pc; \
@@ -532,12 +533,13 @@ if (--csub->ref == 0) { \
 
 int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 {
-	int i, j, c, l = 0, *npc, gen = 1, subidx = 1;
+	int i, j, c, l = 0, gen = 1, subidx = 1;
 	int rsubsize = sizeof(rsub)+(sizeof(char*)*nsubp);
 	int clistidx = 0, nlistidx = 0;
 	const char *sp = s;
+	const int *insts = prog->insts;
 	int plist[prog->unilen];
-	int *pcs[prog->splits];
+	const int *pcs[prog->splits], *npc;
 	rsub *subs[prog->splits];
 	char nsubs[rsubsize*256];
 	rsub *nsub = (rsub*)nsubs, *lsub = nsub, *matched = NULL, *s1;
@@ -554,8 +556,6 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 
 	gen = 1;
 	nsub->ref = 2;
-	newsub(nsub);
-	nsub->sub[0] = sp;
 	goto jmp_start;
 	for(;; sp += l) {
 		gen++; uc_len(l, sp) uc_code(c, sp)
@@ -568,7 +568,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 					break;
 			case ANY:
 			addthread:
-				addthread(2, nlist, nlistidx, npc, nsub, continue)
+				addthread(2, nlist, nlistidx, npc, nsub)
 			case CLASS:
 				if (!re_classmatch(npc, c))
 					break;
@@ -592,12 +592,10 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 		if (!matched) {
 			nsub = lsub;
 			nsub->ref++;
+			jmp_start:
 			newsub(nsub)
 			nsub->sub[0] = sp + l;
-			jmp_start:
-			while (1)
-				addthread(1, clist, clistidx, prog->insts, nsub, break)
-			continue;
+			addthread(1, clist, clistidx, insts, nsub)
 		} else if (!clistidx)
 			break;
 	}
