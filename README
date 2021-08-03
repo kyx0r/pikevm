@@ -30,18 +30,25 @@ to that.
 so that the user does not need to waste time taking strlen()
 * Support for quoted chars in regex.
 * Support for ^, $ assertions in regex.
-* Support for "match" vs "search" operations, as common in other regex APIs.
-* Support for named character classes: \d \D \s \S \w \W.
 * Support for repetition operator {n} and {n,m}.
 * Support for Unicode (UTF-8).
 * Unlike other engines, the output is byte level offset. (Which is more useful)
+* Support for wordend & wordbeg assertions
+- Some limitations for word assertions are meta chars like spaces being used
+in for expression itself, for example "\< abc" should match " abc" exactly at
+that space word boundary but it won't. It's possible to fix this, but it would
+require rsplit before word assert, and some dirty logic to check that the character
+or class is a space we want to match not assert at. But the code for it was too
+dirty and I scrapped it. Syntax for word assertions are like posix C library, not
+the pcre "\b" which can be used both in front or back of the word, because there is
+no distinction, it makes the implementation potentially even uglier.
+
 
 TODO
 ====
 
-* Support for matching flags like case-insensitive, dot matches all,
-multiline, etc.
-* Support for wordend & wordbeg assertions
+* Support for matching flags like case-insensitive
+* maybe add lookaround, ahead, behind
 
 Author and License
 ==================

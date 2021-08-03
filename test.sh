@@ -56,9 +56,33 @@ abc$|c
 ^abc+d
 ^(abc|kj)
 ^(abc|kj)
+(^abc)|(abc)
+(abc)|(^abc)
+(^abc)|(abc$)
+(^abc)|(abc$)
+(^abc)|(abc$)
 ([^qwe]*rty)|(asd[^fgh]*)
 ([^qwe]*rty+)|(asd[^fgh]*)
 ((abc))(fv)
+\\\\<abc
+\\\\<abc
+\\\\<(as|js)
+\\\\<(as|js)
+ab\\\\<d
+\\\\<d+(abc|fbc|bcd)
+\\\\<d+(abc|fbc|bcd)
+\\\\<d+(abc|fbc|bcd)
+b|\\\\<(abc|fbc|bcd)
+\\\\<abc
+\\\\<abc\\\\>
+abc\\\\>
+abc\\\\>
+\\\\<(hello|world|word|nice|try)\\\\>
+\\\\<(hello|world|word|nice|try)\\\\>
+\\\\<(hello|world|word|nice|try)\\\\>
+\\\\<(hello|world|word|nice|try)\\\\>
+\\\\<(hello|world)\\\\>|\\\\<(word|nice|try)\\\\>
+(abc+)|\\\\<[^k]*\\\\>
 "
 input="\
 abcdef
@@ -116,9 +140,33 @@ abccdb
 abccdb
 kj
 jhdfh kj hhd
+ abc
+ abc
+ abc
+abc
+ abc bc
 qweasd     qqqq fff
 qwehh  sjsjsj rtyyyyyyyyyj sdj
 abcfv
+   	   abc
+ hsdh  abc
+     js hashasd
+     gjs hashasd
+ab   d
+     bcddd bddddfbc
+     bcddd ddvddfbc
+     bcddd ddddfbc
+     bcddd fbc
+abc
+   abc   
+abcccc
+abc
+world
+ world 
+    worldfsd
+    dworld
+    nice   
+    nicehdhfd
 "
 expect="\
 (0,3)
@@ -176,9 +224,33 @@ expect="\
 (0,5)
 (0,2)(0,2)
 -nomatch-
+(1,4)(?,?)(1,4)
+(1,4)(1,4)(?,?)
+(1,4)(?,?)(1,4)
+(0,3)(0,3)(?,?)
+-nomatch-
 (3,16)(?,?)(3,16)
 (3,25)(3,25)(?,?)
 (0,5)(0,3)(0,3)(3,5)
+(7,10)
+(7,10)
+(5,7)(5,7)
+-nomatch-
+-nomatch-
+-nomatch-
+-nomatch-
+(11,18)(15,18)
+(5,6)(?,?)
+(0,3)
+(3,6)
+-nomatch-
+(0,3)
+(0,5)(0,5)
+(1,6)(1,6)
+-nomatch-
+-nomatch-
+(4,8)(?,?)(4,8)
+(4,13)(?,?)
 (0,0)
 "
 c=1

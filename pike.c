@@ -81,6 +81,8 @@ enum
 	ASSERT,
 	BOL,
 	EOL,
+	WBEG,
+	WEND,
 	// Instructions which take relative offset as arg
 	JMP,
 	SPLIT,
@@ -187,6 +189,10 @@ void re_dumpcode(rcode *prog)
 				printf("assert bol\n");
 			else if (code[pc] == EOL)
 				printf("assert eol\n");
+			else if (code[pc] == WBEG)
+				printf("assert wbeg\n");
+			else if (code[pc] == WEND)
+				printf("assert wend\n");
 			pc++;
 			break;
 		}
@@ -206,6 +212,13 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 		case '\\':
 			re++;
 			if (!*re) goto syntax_error; // Trailing backslash
+			if (*re == '<' || *re == '>') {
+				EMIT(PC++, ASSERT);
+				EMIT(PC++, *re == '<' ? WBEG : WEND);
+				prog->len++;
+				term = PC;
+				break;
+			}
 		default:
 			term = PC;
 			EMIT(PC++, CHAR);
@@ -411,8 +424,7 @@ unsupported_escape:
 int re_sizecode(const char *re)
 {
 	rcode dummyprog;
-	// SAVE 0, SAVE 1, MATCH; more bytes for "search" (vs "match") prefix code
-	dummyprog.unilen = 10;
+	dummyprog.unilen = 3;
 
 	int res = _compilecode(&re, &dummyprog, /*sizecode*/1);
 	if (res < 0) return res;
@@ -469,6 +481,7 @@ if (--csub->ref == 0) { \
 	rsub *sub = _sub; \
 	rec##nn: \
 	if(plist[pc - prog->insts] == gen) { \
+		dec_check##nn: \
 		decref(sub) \
 		rec_check##nn: \
 		if (i) { \
@@ -508,20 +521,21 @@ if (--csub->ref == 0) { \
 		goto rec##nn; \
 	case ASSERT: \
 		pc++; \
-		if(*pc == BOL && _sp != s) \
-			goto rec_check##nn; \
-		if(*pc == EOL && *_sp) \
-			goto rec_check##nn; \
+		if (*pc == BOL && _sp != s) { \
+			if (!i && !listidx) \
+				return 0; \
+			goto dec_check##nn; \
+		} \
+		if (*pc == EOL && *_sp) \
+			goto dec_check##nn; \
+		if (*pc == WBEG && (!isword(_sp) || isword(sp)) \
+				&& !(sp == s && isword(sp))) \
+			goto dec_check##nn; \
+		if (*pc == WEND && isword(_sp)) \
+			goto dec_check##nn; \
 		pc++; goto rec##nn; \
 	} \
 } \
-
-#define swaplist() \
-tmp = clist; \
-clist = nlist; \
-nlist = tmp; \
-clistidx = nlistidx; \
-nlistidx = 0; \
 
 int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 {
@@ -550,7 +564,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 	newsub(nsub);
 	nsub->sub[0] = sp;
 	goto jmp_start;
-	for(; clistidx; sp += l) {
+	for(;; sp += l) {
 		gen++; uc_len(l, sp) uc_code(c, sp)
 		for(i = 0; i < clistidx; i++) {
 			npc = clist[i].pc;
@@ -577,18 +591,22 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 		break_for:
 		if (!c)
 			break;
+		tmp = clist;
+		clist = nlist;
+		nlist = tmp;
+		clistidx = nlistidx;
+		nlistidx = 0;
 		if (!matched) {
 			nsub = lsub;
 			nsub->ref++;
 			newsub(nsub)
 			nsub->sub[0] = sp + l;
-			swaplist()
 			jmp_start:
 			while (1)
 				addthread(1, clist, clistidx, prog->insts, nsub, break)
 			continue;
-		}
-		swaplist()
+		} else if (!clistidx)
+			break;
 	}
 	if(matched) {
 		for(i=0; i<nsubp; i++)
