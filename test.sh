@@ -90,6 +90,7 @@ abc\\\\>
 [-+]?\\\\<(0[xX][0-9a-fA-FUL]+|[0-9.]{1,}[0-9eEfFuULl]+|[0-9]+)\\\\>
 [-+]?\\\\<(0[xX][0-9a-fA-FUL]+|[0-9.]{1,}[0-9eEfFuULl]+|[0-9]+)\\\\>
 [-+]?\\\\<(0[xX][0-9a-fA-FUL]+|[0-9.]{1,}[0-9eEfFuULl]+|[0-9]+)\\\\>
+qwerty.*$
 "
 input="\
 abcdef
@@ -181,6 +182,7 @@ world
    3245 jjfjjj
    0x663q
  x37247
+ jjdfjk sjdjjsqwerty jdfjdfhhdhfdjjjfj jjjdf
 "
 expect="\
 (0,3)
@@ -272,6 +274,7 @@ expect="\
 (3,7)(3,7)
 -nomatch-
 -nomatch-
+(14,44)
 (0,0)
 "
 
@@ -293,4 +296,4 @@ echo "$regex" | tr '\n' | while read re; do
 	c=$((c+1))
 done
 
-gcc pike.c -pedantic -Wall -Wfatal-errors -std=c99
+gcc pike.c -pedantic -Wall -Wfatal-errors -std=c99 $CFLAGS

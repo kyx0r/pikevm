@@ -447,16 +447,12 @@ int re_comp(rcode *prog, const char *re)
 	return RE_SUCCESS;
 }
 
-#define newsub(n, csub) \
+#define newsub() \
 s1 = freesub; \
 if (s1) \
 	freesub = (rsub*)s1->sub[0]; \
 else \
 	s1 = (rsub*)&nsubs[rsubsize * subidx++]; \
-for (j = n; j < nsubp; j++) \
-	s1->sub[j] = csub->sub[j]; \
-csub = s1; \
-csub->ref = 1; \
 
 #define decref(csub) \
 if (--csub->ref == 0) { \
@@ -471,6 +467,11 @@ if (--csub->ref == 0) { \
 	const char *_sp = sp+l; \
 	rsub *sub = _sub; \
 	rec##nn: \
+	if (*pc < ASSERT) { \
+		list[listidx].sub = sub; \
+		list[listidx++].pc = pc; \
+		goto rec_check##nn; \
+	} \
 	if(plist[pc - insts] == gen) { \
 		dec_check##nn: \
 		decref(sub) \
@@ -483,11 +484,6 @@ if (--csub->ref == 0) { \
 		continue; \
 	} \
 	plist[pc - insts] = gen; \
-	if (*pc < ASSERT) { \
-		list[listidx].sub = sub; \
-		list[listidx++].pc = pc; \
-		goto rec_check##nn; \
-	} \
 	switch(*pc) { \
 	case JMP: \
 		pc += 2 + pc[1]; \
@@ -508,7 +504,11 @@ if (--csub->ref == 0) { \
 	case SAVE: \
 		if (sub->ref > 1) { \
 			sub->ref--; \
-			newsub(0, sub) \
+			newsub() \
+			for (j = 0; j < nsubp; j++) \
+				s1->sub[j] = sub->sub[j]; \
+			sub = s1; \
+			sub->ref = 1; \
 		} \
 		sub->sub[pc[1]] = _sp; \
 		pc += 2; \
@@ -542,18 +542,14 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 	const int *pcs[prog->splits], *npc;
 	rsub *subs[prog->splits];
 	char nsubs[rsubsize*256];
-	rsub *nsub = (rsub*)nsubs, *lsub = nsub, *matched = NULL, *s1;
+	rsub *nsub = (rsub*)nsubs, *matched = NULL, *s1;
 	rsub *freesub = NULL;
 	rthread _clist[prog->len]; 
 	rthread _nlist[prog->len]; 
 	rthread *clist = _clist, *nlist = _nlist, *tmp;
 	memset(plist, 0, prog->unilen*sizeof(plist[0]));
-
-	for(i = 0; i < nsubp; i++) {
+	for(i = 0; i < nsubp; i++)
 		subp[i] = NULL;
-		nsub->sub[i] = NULL;
-	}
-
 	gen = 1;
 	goto jmp_start;
 	for(;; sp += l) {
@@ -589,17 +585,21 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 		clistidx = nlistidx;
 		nlistidx = 0;
 		if (!matched) {
-			nsub = lsub;
 			jmp_start:
-			newsub(1, nsub)
-			nsub->sub[0] = sp + l;
-			addthread(1, clist, clistidx, insts, nsub)
+			newsub()
+			s1->ref = 1;
+			s1->sub[0] = sp + l;
+			addthread(1, clist, clistidx, insts, s1)
 		} else if (!clistidx)
 			break;
 	}
 	if(matched) {
-		for(i = 0; i < nsubp; i++)
-			subp[i] = matched->sub[i];
+		for(i = 0; i < nsubp; i+=2) {
+			if (matched->sub[i] && matched->sub[i+1]) {
+				subp[i] = matched->sub[i];
+				subp[i+1] = matched->sub[i+1];
+			}
+		}
 		return 1;
 	}
 	return 0;
