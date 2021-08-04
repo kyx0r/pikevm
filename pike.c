@@ -60,6 +60,7 @@ struct rcode
 	int len;
 	int sub;
 	int splits;
+	int gen;
 	int insts[];
 };
 
@@ -102,7 +103,7 @@ struct rsub
 typedef struct rthread rthread;
 struct rthread
 {
-	const int *pc;
+	int *pc;
 	rsub *sub;
 };
 
@@ -433,6 +434,7 @@ int re_comp(rcode *prog, const char *re)
 	prog->unilen = 0;
 	prog->sub = 0;
 	prog->splits = 0;
+	prog->gen = 1;
 
 	int res = _compilecode(&re, prog, /*sizecode*/0);
 	if (res < 0) return res;
@@ -446,6 +448,9 @@ int re_comp(rcode *prog, const char *re)
 
 	return RE_SUCCESS;
 }
+
+#define _return(state) \
+{ prog->gen = gen + 1; return state; } \
 
 #define newsub() \
 s1 = freesub; \
@@ -462,8 +467,7 @@ if (--csub->ref == 0) { \
 
 #define addthread(nn, list, listidx, _pc, _sub) \
 { \
-	int i = 0; \
-	const int *pc = _pc; \
+	int i = 0, *pc = _pc; \
 	const char *_sp = sp+l; \
 	rsub *sub = _sub; \
 	rec##nn: \
@@ -517,7 +521,7 @@ if (--csub->ref == 0) { \
 		pc++; \
 		if (*pc == BOL && _sp != s) { \
 			if (!i && !listidx) \
-				return 0; \
+				_return(0) \
 			goto dec_check##nn; \
 		} \
 		if (*pc == EOL && *_sp) \
@@ -533,24 +537,23 @@ if (--csub->ref == 0) { \
 
 int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 {
-	int i, j, c, l = 0, gen = 1, subidx = 1;
+	int i, j, c, l = 0, gen, subidx = 1, *npc;
 	int rsubsize = sizeof(rsub)+(sizeof(char*)*nsubp);
 	int clistidx = 0, nlistidx = 0;
 	const char *sp = s;
-	const int *insts = prog->insts;
-	int plist[prog->unilen];
-	const int *pcs[prog->splits], *npc;
+	int *insts = prog->insts, *plist = insts+prog->unilen;
+	int *pcs[prog->splits];
 	rsub *subs[prog->splits];
-	char nsubs[rsubsize*256];
+	char nsubs[rsubsize * (prog->len - prog->splits)];
 	rsub *nsub = (rsub*)nsubs, *matched = NULL, *s1;
 	rsub *freesub = NULL;
 	rthread _clist[prog->len]; 
 	rthread _nlist[prog->len]; 
 	rthread *clist = _clist, *nlist = _nlist, *tmp;
-	memset(plist, 0, prog->unilen*sizeof(plist[0]));
+	memset(nsubs, 0, rsubsize * (prog->len - prog->splits));
 	for(i = 0; i < nsubp; i++)
 		subp[i] = NULL;
-	gen = 1;
+	gen = prog->gen;
 	goto jmp_start;
 	for(;; sp += l) {
 		gen++; uc_len(l, sp) uc_code(c, sp)
@@ -600,9 +603,9 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 				subp[i+1] = matched->sub[i+1];
 			}
 		}
-		return 1;
+		_return(1)
 	}
-	return 0;
+	_return(0)
 }
 
 int main(int argc, char *argv[])
@@ -613,7 +616,8 @@ int main(int argc, char *argv[])
 	}
 	int sz = re_sizecode(argv[1]) * sizeof(int);
 	printf("Precalculated size: %d\n", sz);
-	char code[sizeof(rcode)+sz];
+	char code[sizeof(rcode)+(sz*2)];
+	memset(code+sz, 0, sz);
 	rcode *_code = (rcode*)code;
 	if (re_comp(_code, argv[1]))
 		re_fatal("Error in re_comp");
