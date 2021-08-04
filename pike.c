@@ -550,7 +550,6 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 	rthread _clist[prog->len]; 
 	rthread _nlist[prog->len]; 
 	rthread *clist = _clist, *nlist = _nlist, *tmp;
-	memset(nsubs, 0, rsubsize * (prog->len - prog->splits));
 	for(i = 0; i < nsubp; i++)
 		subp[i] = NULL;
 	gen = prog->gen;
@@ -591,18 +590,16 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 			jmp_start:
 			newsub()
 			s1->ref = 1;
+			for (i = 1; i < nsubp; i++)
+				s1->sub[i] = NULL;
 			s1->sub[0] = sp + l;
 			addthread(1, clist, clistidx, insts, s1)
 		} else if (!clistidx)
 			break;
 	}
 	if(matched) {
-		for(i = 0; i < nsubp; i+=2) {
-			if (matched->sub[i] && matched->sub[i+1]) {
-				subp[i] = matched->sub[i];
-				subp[i+1] = matched->sub[i+1];
-			}
-		}
+		for(i = 0; i < nsubp; i++)
+			subp[i] = matched->sub[i];
 		_return(1)
 	}
 	_return(0)
