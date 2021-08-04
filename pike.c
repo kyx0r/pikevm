@@ -616,8 +616,8 @@ int main(int argc, char *argv[])
 	}
 	int sz = re_sizecode(argv[1]) * sizeof(int);
 	printf("Precalculated size: %d\n", sz);
-	char code[sizeof(rcode)+(sz*2)];
-	memset(code+sz, 0, sz);
+	char code[(sizeof(rcode)+sz)*2];
+	memset(code+sizeof(rcode)+sz, 0, sizeof(rcode)+sz);
 	rcode *_code = (rcode*)code;
 	if (re_comp(_code, argv[1]))
 		re_fatal("Error in re_comp");
