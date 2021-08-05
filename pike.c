@@ -72,11 +72,10 @@ enum
 	CLASS,
 	MATCH,
 	// Assert position
-	ASSERT,
-	BOL,
-	EOL,
 	WBEG,
 	WEND,
+	BOL,
+	EOL,
 	// Instructions which take relative offset as arg
 	JMP,
 	SPLIT,
@@ -178,16 +177,17 @@ void re_dumpcode(rcode *prog)
 		case SAVE:
 			printf("save %d\n", code[pc++]);
 			break;
-		case ASSERT:
-			if (code[pc] == BOL)
-				printf("assert bol\n");
-			else if (code[pc] == EOL)
-				printf("assert eol\n");
-			else if (code[pc] == WBEG)
-				printf("assert wbeg\n");
-			else if (code[pc] == WEND)
-				printf("assert wend\n");
-			pc++;
+		case WBEG:
+			printf("assert wbeg\n");
+			break;
+		case WEND:
+			printf("assert wend\n");
+			break;
+		case BOL:
+			printf("assert bol\n");
+			break;
+		case EOL:
+			printf("assert eol\n");
 			break;
 		}
 	}
@@ -207,7 +207,6 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			re++;
 			if (!*re) goto syntax_error; // Trailing backslash
 			if (*re == '<' || *re == '>') {
-				EMIT(PC++, ASSERT);
 				EMIT(PC++, *re == '<' ? WBEG : WEND);
 				prog->len++;
 				term = PC;
@@ -286,7 +285,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			break;
 		case '{':;
 			int maxcnt = 0, mincnt = 0,
-			i = 0, icnt = 0, size, split;
+			i = 0, icnt = 0, size;
 			re++;
 			while (isdigit((unsigned char) *re))
 				mincnt = mincnt * 10 + *re++ - '0';
@@ -303,11 +302,10 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 					memcpy(&code[PC], &code[term], size*sizeof(int));
 				PC += size;
 			}
-			split = *(re+1) == '[' ? RSPLIT : SPLIT;
 			for (i = maxcnt-mincnt; i > 0; i--)
 			{
 				prog->splits++;
-				EMIT(PC++, split);
+				EMIT(PC++, SPLIT);
 				EMIT(PC++, REL(PC, PC+((size+2)*i)));
 				if (code)
 					memcpy(&code[PC], &code[term], size*sizeof(int));
@@ -388,13 +386,11 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			term = PC;
 			break;
 		case '^':
-			EMIT(PC++, ASSERT);
 			EMIT(PC++, BOL);
 			prog->len++;
 			term = PC;
 			break;
 		case '$':
-			EMIT(PC++, ASSERT);
 			EMIT(PC++, EOL);
 			prog->len++;
 			term = PC;
@@ -471,7 +467,7 @@ if (--csub->ref == 0) { \
 	const char *_sp = sp+l; \
 	rsub *sub = _sub; \
 	rec##nn: \
-	if (*pc < ASSERT) { \
+	if (*pc < WBEG) { \
 		list[listidx].sub = sub; \
 		list[listidx++].pc = pc; \
 		goto rec_check##nn; \
@@ -517,19 +513,24 @@ if (--csub->ref == 0) { \
 		sub->sub[pc[1]] = _sp; \
 		pc += 2; \
 		goto rec##nn; \
-	case ASSERT: \
-		pc++; \
-		if (*pc == BOL && _sp != s) { \
+	case WBEG: \
+		if (!nlistidx && (!isword(_sp) || isword(sp)) \
+				&& !(sp == s && isword(sp))) \
+			goto dec_check##nn; \
+		pc++; goto rec##nn; \
+	case WEND: \
+		if (isword(_sp)) \
+			goto dec_check##nn; \
+		pc++; goto rec##nn; \
+	case BOL: \
+		if (_sp != s) { \
 			if (!i && !listidx) \
 				_return(0) \
 			goto dec_check##nn; \
 		} \
-		if (*pc == EOL && *_sp) \
-			goto dec_check##nn; \
-		if (*pc == WBEG && (!isword(_sp) || isword(sp)) \
-				&& !(sp == s && isword(sp))) \
-			goto dec_check##nn; \
-		if (*pc == WEND && isword(_sp)) \
+		pc++; goto rec##nn; \
+	case EOL: \
+		if (*_sp) \
 			goto dec_check##nn; \
 		pc++; goto rec##nn; \
 	} \
@@ -555,6 +556,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 	gen = prog->gen;
 	goto jmp_start;
 	for(;; sp += l) {
+		nlistidx = 0;
 		gen++; uc_len(l, sp) uc_code(c, sp)
 		for(i = 0; i < clistidx; i++) {
 			npc = clist[i].pc;
@@ -585,7 +587,6 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 		clist = nlist;
 		nlist = tmp;
 		clistidx = nlistidx;
-		nlistidx = 0;
 		if (!matched) {
 			jmp_start:
 			newsub()

@@ -90,6 +90,7 @@ abc\\\\>
 [-+]?\\\\<(0[xX][0-9a-fA-FUL]+|[0-9.]{1,}[0-9eEfFuULl]+|[0-9]+)\\\\>
 [-+]?\\\\<(0[xX][0-9a-fA-FUL]+|[0-9.]{1,}[0-9eEfFuULl]+|[0-9]+)\\\\>
 [-+]?\\\\<(0[xX][0-9a-fA-FUL]+|[0-9.]{1,}[0-9eEfFuULl]+|[0-9]+)\\\\>
+[-+]?\\\\<(0[xX][0-9a-fA-FUL]+|[0-9.]{1,}[0-9eEfFuULl]+|[0-9]+)\\\\>
 qwerty.*$
 "
 input="\
@@ -182,6 +183,7 @@ world
    3245 jjfjjj
    0x663q
  x37247
+  124435.7727ULL
  jjdfjk sjdjjsqwerty jdfjdfhhdhfdjjjfj jjjdf
 "
 expect="\
@@ -274,6 +276,7 @@ expect="\
 (3,7)(3,7)
 -nomatch-
 -nomatch-
+(2,16)(2,16)
 (14,44)
 (0,0)
 "
