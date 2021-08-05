@@ -464,23 +464,23 @@ if (--csub->ref == 0) { \
 		list[listidx++].pc = pc; \
 		goto rec_check##nn; \
 	} \
-	if(plist[pc - insts] == gen) { \
-		dec_check##nn: \
-		decref(sub) \
-		rec_check##nn: \
-		if (i) { \
-			pc = pcs[--i]; \
-			sub = subs[i]; \
-			goto rec##nn; \
-		} \
-		continue; \
-	} \
-	plist[pc - insts] = gen; \
 	switch(*pc) { \
 	case JMP: \
 		pc += 2 + pc[1]; \
 		goto rec##nn; \
 	case SPLIT: \
+		if(plist[pc - insts] == gen) { \
+			dec_check##nn: \
+			decref(sub) \
+			rec_check##nn: \
+			if (i) { \
+				pc = pcs[--i]; \
+				sub = subs[i]; \
+				goto rec##nn; \
+			} \
+			continue; \
+		} \
+		plist[pc - insts] = gen; \
 		subs[i] = sub; \
 		sub->ref++; \
 		pc += 2; \
