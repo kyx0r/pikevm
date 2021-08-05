@@ -112,7 +112,7 @@ pc += num;
 #define EMIT(at, byte) (code ? (code[at] = byte) : at)
 #define PC (prog->unilen)
 
-int re_classmatch(const int *pc, int c)
+static int re_classmatch(const int *pc, int c)
 {
 	// pc points to "classnot" byte after opcode
 	int is_positive = *pc++;
