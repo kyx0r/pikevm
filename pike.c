@@ -7,8 +7,6 @@
 #include <stdarg.h>
 #include <ctype.h>
 
-#define nelem(x) (sizeof(x)/sizeof((x)[0]))
-
 const unsigned char utf8_length[256] = {
 	/* 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
 	/* 0 */ 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
@@ -113,12 +111,6 @@ pc += num;
 #define REL(at, to) (to - at - 2)
 #define EMIT(at, byte) (code ? (code[at] = byte) : at)
 #define PC (prog->unilen)
-
-void re_fatal(char *msg)
-{
-	fprintf(stderr, "fatal error: %s\n", msg);
-	exit(2);
-}
 
 int re_classmatch(const int *pc, int c)
 {
@@ -514,7 +506,7 @@ if (--csub->ref == 0) { \
 		pc += 2; \
 		goto rec##nn; \
 	case WBEG: \
-		if (!nlistidx && (!isword(_sp) || isword(sp)) \
+		if ((!isword(_sp) || isword(sp)) \
 				&& !(sp == s && isword(sp))) \
 			goto dec_check##nn; \
 		pc++; goto rec##nn; \
@@ -617,8 +609,10 @@ int main(int argc, char *argv[])
 	char code[(sizeof(rcode)+sz)*2];
 	memset(code+sizeof(rcode)+sz, 0, sizeof(rcode)+sz);
 	rcode *_code = (rcode*)code;
-	if (re_comp(_code, argv[1]))
-		re_fatal("Error in re_comp");
+	if (re_comp(_code, argv[1])) {
+		printf("Error in re_comp");
+		return 1;
+	}
 	re_dumpcode(_code);
 	#include <time.h>
 	if (argc > 2) {
