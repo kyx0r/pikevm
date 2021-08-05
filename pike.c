@@ -506,8 +506,7 @@ if (--csub->ref == 0) { \
 		pc += 2; \
 		goto rec##nn; \
 	case WBEG: \
-		if ((!isword(_sp) || isword(sp)) \
-				&& !(sp == s && isword(sp))) \
+		if ((sp != s && isword(sp)) || !isword(_sp)) \
 			goto dec_check##nn; \
 		pc++; goto rec##nn; \
 	case WEND: \
