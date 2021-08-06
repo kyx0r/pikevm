@@ -453,6 +453,19 @@ if (--csub->ref == 0) { \
 	freesub = csub; \
 } \
 
+#define deccheck(nn) \
+{ decref(sub) goto rec_check##nn; } \
+
+#define fastrec(nn, list, listidx) \
+if (*pc < WBEG) { \
+	list[listidx].sub = sub; \
+	list[listidx++].pc = pc; \
+	pc = pcs[i]; \
+	goto rec##nn; \
+} \
+subs[i++] = sub; \
+goto next##nn; \
+
 #define addthread(nn, list, listidx, _pc, _sub) \
 { \
 	int i = 0, *pc = _pc; \
@@ -462,37 +475,36 @@ if (--csub->ref == 0) { \
 	if (*pc < WBEG) { \
 		list[listidx].sub = sub; \
 		list[listidx++].pc = pc; \
-		goto rec_check##nn; \
+		rec_check##nn: \
+		if (i) { \
+			pc = pcs[--i]; \
+			sub = subs[i]; \
+			goto rec##nn; \
+		} \
+		continue; \
 	} \
+	next##nn: \
 	switch(*pc) { \
 	case JMP: \
 		pc += 2 + pc[1]; \
 		goto rec##nn; \
 	case SPLIT: \
-		if(plist[pc - insts] == gen) { \
-			dec_check##nn: \
-			decref(sub) \
-			rec_check##nn: \
-			if (i) { \
-				pc = pcs[--i]; \
-				sub = subs[i]; \
-				goto rec##nn; \
-			} \
-			continue; \
-		} \
+		if(plist[pc - insts] == gen) \
+			deccheck(nn) \
 		plist[pc - insts] = gen; \
-		subs[i] = sub; \
 		sub->ref++; \
 		pc += 2; \
-		pcs[i++] = pc + pc[-1]; \
-		goto rec##nn; \
+		pcs[i] = pc + pc[-1]; \
+		fastrec(nn, list, listidx) \
 	case RSPLIT: \
-		subs[i] = sub; \
+		if(plist[pc - insts] == gen) \
+			deccheck(nn) \
+		plist[pc - insts] = gen; \
 		sub->ref++; \
 		pc += 2; \
-		pcs[i++] = pc; \
+		pcs[i] = pc; \
 		pc += pc[-1]; \
-		goto rec##nn; \
+		fastrec(nn, list, listidx) \
 	case SAVE: \
 		if (sub->ref > 1) { \
 			sub->ref--; \
@@ -507,22 +519,22 @@ if (--csub->ref == 0) { \
 		goto rec##nn; \
 	case WBEG: \
 		if ((sp != s && isword(sp)) || !isword(_sp)) \
-			goto dec_check##nn; \
+			deccheck(nn) \
 		pc++; goto rec##nn; \
 	case WEND: \
 		if (isword(_sp)) \
-			goto dec_check##nn; \
+			deccheck(nn) \
 		pc++; goto rec##nn; \
 	case BOL: \
 		if (_sp != s) { \
 			if (!i && !listidx) \
 				_return(0) \
-			goto dec_check##nn; \
+			deccheck(nn) \
 		} \
 		pc++; goto rec##nn; \
 	case EOL: \
 		if (*_sp) \
-			goto dec_check##nn; \
+			deccheck(nn) \
 		pc++; goto rec##nn; \
 	} \
 } \
@@ -547,7 +559,6 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 	gen = prog->gen;
 	goto jmp_start;
 	for(;; sp += l) {
-		nlistidx = 0;
 		gen++; uc_len(l, sp) uc_code(c, sp)
 		for(i = 0; i < clistidx; i++) {
 			npc = clist[i].pc;
@@ -578,6 +589,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 		clist = nlist;
 		nlist = tmp;
 		clistidx = nlistidx;
+		nlistidx = 0;
 		if (!matched) {
 			jmp_start:
 			newsub()
