@@ -469,7 +469,6 @@ goto next##nn; \
 #define addthread(nn, list, listidx, _pc, _sub) \
 { \
 	int i = 0, *pc = _pc; \
-	const char *_sp = sp+l; \
 	rsub *sub = _sub; \
 	rec##nn: \
 	if (*pc < WBEG) { \
@@ -544,11 +543,11 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 	int i, j, c, l = 0, gen, subidx = 1, *npc;
 	int rsubsize = sizeof(rsub)+(sizeof(char*)*nsubp);
 	int clistidx = 0, nlistidx = 0;
-	const char *sp = s;
+	const char *sp = s, *_sp = s;
 	int *insts = prog->insts, *plist = insts+prog->unilen;
 	int *pcs[prog->splits];
 	rsub *subs[prog->splits];
-	char nsubs[rsubsize * (prog->len - prog->splits)];
+	char nsubs[rsubsize * (prog->len+3 - prog->splits)];
 	rsub *nsub = (rsub*)nsubs, *matched = NULL, *s1;
 	rsub *freesub = NULL;
 	rthread _clist[prog->len]; 
@@ -558,8 +557,9 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 		subp[i] = NULL;
 	gen = prog->gen;
 	goto jmp_start;
-	for(;; sp += l) {
+	for(;; sp = _sp) {
 		gen++; uc_len(l, sp) uc_code(c, sp)
+		_sp = sp+l;
 		for(i = 0; i < clistidx; i++) {
 			npc = clist[i].pc;
 			nsub = clist[i].sub;
@@ -576,6 +576,8 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 				npc += *(npc+1) * 2 + 2;
 				goto addthread;
 			case MATCH:
+				if (matched)
+					decref(matched)
 				matched = nsub;
 				subidx = 0;
 				goto break_for;
@@ -596,7 +598,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 			s1->ref = 1;
 			for (i = 1; i < nsubp; i++)
 				s1->sub[i] = NULL;
-			s1->sub[0] = sp + l;
+			s1->sub[0] = _sp;
 			addthread(1, clist, clistidx, insts, s1)
 		} else if (!clistidx)
 			break;
