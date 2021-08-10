@@ -496,10 +496,10 @@ goto next##nn; \
 		fastrec(nn, list, listidx) \
 	case SAVE: \
 		if (sub->ref > 1) { \
-			sub->ref--; \
 			newsub() \
 			for (j = 0; j < nsubp; j++) \
 				s1->sub[j] = sub->sub[j]; \
+			sub->ref--; \
 			sub = s1; \
 			sub->ref = 1; \
 		} \
@@ -543,8 +543,6 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 	rthread _clist[prog->len]; 
 	rthread _nlist[prog->len]; 
 	rthread *clist = _clist, *nlist = _nlist, *tmp;
-	for(i = 0; i < nsubp; i++)
-		subp[i] = NULL;
 	gen = prog->gen;
 	goto jmp_start;
 	for(;; sp = _sp) {
