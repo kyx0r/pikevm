@@ -103,6 +103,8 @@ qwerty.*$
 (a|aa)*
 (a|aa)*
 (aaaa|aaa|a){3,4}
+(a)(a)
+(a){2}
 "
 input="\
 abcdef
@@ -207,6 +209,8 @@ aaaa
 aaaaa
 aaaaaa
 aaaaaaaaaa
+aaaa
+aaaa
 "
 expect="\
 (0,3)
@@ -311,6 +315,8 @@ expect="\
 (0,5)(4,5)
 (0,6)(5,6)
 (0,10)(9,10)
+(0,2)(0,1)(1,2)
+(0,2)(1,2)
 (0,0)
 "
 

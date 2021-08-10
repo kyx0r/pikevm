@@ -86,8 +86,7 @@ enum
 enum {
 	RE_SUCCESS = 0,
 	RE_SYNTAX_ERROR = -2,
-	RE_UNSUPPORTED_ESCAPE = -3,
-	RE_UNSUPPORTED_SYNTAX = -4,
+	RE_UNSUPPORTED_SYNTAX = -3,
 };
 
 typedef struct rsub rsub;
@@ -229,12 +228,6 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			prog->len++;
 			for (cnt = 0; *re != ']'; cnt++) {
 				if (!*re) goto syntax_error;
-				if (*re == '\\') {
-					re++;
-					if (!*re) goto syntax_error;
-					if (*re != '\\' && *re != ']')
-						goto unsupported_escape;
-				}
 				uc_code(c, re) EMIT(PC++, c);
 				uc_len(c, re)
 				if (re[c] == '-' && re[c+1] != ']')
@@ -398,9 +391,6 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 syntax_error:
 	*re_loc = re;
 	return RE_SYNTAX_ERROR;
-unsupported_escape:
-	*re_loc = re;
-	return RE_UNSUPPORTED_ESCAPE;
 }
 
 int re_sizecode(const char *re)
