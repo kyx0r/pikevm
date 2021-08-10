@@ -576,10 +576,11 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 				npc += *(npc+1) * 2 + 2;
 				goto addthread;
 			case MATCH:
-				if (matched)
+				if (matched) {
 					decref(matched)
+					subidx = 0;
+				}
 				matched = nsub;
-				subidx = 0;
 				goto break_for;
 			}
 			decref(nsub)

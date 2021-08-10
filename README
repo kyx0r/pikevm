@@ -47,16 +47,39 @@ no distinction, it makes the implementation potentially even uglier.
 
 NOTES
 =====
-Currently submatch tracking allocates a fix constant, however it is theoretically
-possible to compute the worst case memory usage at compile time and get rid of
-the constant. If this note remains, that means I did not find an efficient way
-to calculate the worst case.
-
-TODO
-====
-
-* Support for matching flags like case-insensitive
-* maybe add lookaround, ahead, behind
+The problem described in this paper has been fixed. Ambiguous matching is correct.
+HISTORY:
+https://re2c.org/2019_borsotti_trofimovich_efficient_posix_submatch_extraction_on_nfa.pdf
+Cox, 2009 (incorrect). Cox came up with the idea of backward POSIX matching, 
+which is based on the observation that reversing the longest-match rule 
+simplifies the handling of iteration subexpressions: instead of maximizing 
+submatch from the first to the last iteration, one needs to maximize the 
+iterations in reverse order. This means that the disambiguation is always 
+based on the most recent iteration, removing the need to remember all previous 
+iterations (except for the backwards-first, i.e.  the last one, which contains 
+submatch result). The algorithm tracks two pairs of offsets per each submatch 
+group: the active pair (used for disambiguation) and the result pair. It gives 
+incorrect results under two conditions: (1) ambiguous matches have equal 
+offsets on some iteration, and (2) disambiguation happens too late, when 
+the active offsets have already been updated and the difference between 
+ambiguous matches is erased. We found that such situations may occur for two 
+reasons. First, the ε-closure algorithm may compare ambiguous paths after 
+their join point, when both paths have a common suffix with tagged
+transitions. This is the case with the Cox prototype implementation; for 
+example, it gives incorrect results for (aa|a)* and string aaaaa. Most of such 
+failures can be repaired by exploring states in topological order, but a 
+topological order does not exist in the presence of ε-loops. The second reason 
+is bounded repetition: ambiguous paths may not have an intermediate join point 
+at all. For example, in the case of (aaaa|aaa|a){3,4} and string aaaaaaaaaa we 
+have matches (aaaa)(aaaa)(a)(a) and (aaaa)(aaa)(aaa) with a different number 
+of iterations. Assuming that the bounded repetition is unrolled by chaining 
+three sub-automata for (aaaa|aaa|a) and an optional fourth one, by the time 
+ambiguous paths meet both have active offsets (0,4). Despite the flaw, Cox 
+algorithm is interesting: if somehow the delayed comparison problem was fixed, 
+it would work.  The algorithm requires O(mt) memory and O(nm^2t) time
+(assuming a worst-case optimal closure algorithm), where n is the
+length of input, m it the size of RE and t is the number of submatch groups 
+and subexpressions that contain them.
 
 Author and License
 ==================
