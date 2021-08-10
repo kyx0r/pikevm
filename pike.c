@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdarg.h>
 #include <ctype.h>
 
 const unsigned char utf8_length[256] = {
@@ -106,7 +105,7 @@ struct rthread
 #define INSERT_CODE(at, num, pc) \
 if (code) \
 	memmove(code + at + num, code + at, (pc - at)*sizeof(int)); \
-pc += num; 
+pc += num;
 #define REL(at, to) (to - at - 2)
 #define EMIT(at, byte) (code ? (code[at] = byte) : at)
 #define PC (prog->unilen)
@@ -307,27 +306,26 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 					case SAVE:
 					case CHAR:
 						i++;
-						icnt++;	
+						icnt++;
 					}
 			}
 			prog->len += maxcnt * icnt;
 			break;
 		case '?':
-			if (PC == term) goto syntax_error; // nothing to repeat
+			if (PC == term) goto syntax_error;
 			INSERT_CODE(term, 2, PC);
 			if (re[1] == '?') {
 				EMIT(term, RSPLIT);
 				re++;
-			} else {
+			} else
 				EMIT(term, SPLIT);
-			}
 			EMIT(term + 1, REL(term, PC));
 			prog->len++;
 			prog->splits++;
 			term = PC;
 			break;
 		case '*':
-			if (PC == term) goto syntax_error; // nothing to repeat
+			if (PC == term) goto syntax_error;
 			INSERT_CODE(term, 2, PC);
 			EMIT(PC, JMP);
 			EMIT(PC + 1, REL(PC, term));
@@ -335,22 +333,20 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			if (re[1] == '?') {
 				EMIT(term, RSPLIT);
 				re++;
-			} else {
+			} else
 				EMIT(term, SPLIT);
-			}
 			EMIT(term + 1, REL(term, PC));
 			prog->splits++;
 			prog->len += 2;
 			term = PC;
 			break;
 		case '+':
-			if (PC == term) goto syntax_error; // nothing to repeat
+			if (PC == term) goto syntax_error;
 			if (re[1] == '?') {
 				EMIT(PC, SPLIT);
 				re++;
-			} else {
+			} else
 				EMIT(PC, RSPLIT);
-			}
 			EMIT(PC + 1, REL(PC, term));
 			PC += 2;
 			prog->splits++;
@@ -358,9 +354,8 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			term = PC;
 			break;
 		case '|':
-			if (alt_label) {
+			if (alt_label)
 				EMIT(alt_label, REL(alt_label, PC) + 1);
-			}
 			INSERT_CODE(start, 2, PC);
 			EMIT(PC++, JMP);
 			alt_label = PC++;
@@ -383,9 +378,8 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 		}
 		uc_len(c, re) re += c;
 	}
-	if (alt_label) {
+	if (alt_label)
 		EMIT(alt_label, REL(alt_label, PC) + 1);
-	}
 	*re_loc = re;
 	return RE_SUCCESS;
 syntax_error:
@@ -530,7 +524,7 @@ goto next##nn; \
 
 int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 {
-	int i, j, c, l = 0, gen, subidx = 1, *npc;
+	int i, j, c, gen, subidx = 1, *npc;
 	int rsubsize = sizeof(rsub)+(sizeof(char*)*nsubp);
 	int clistidx = 0, nlistidx = 0;
 	const char *sp = s, *_sp = s;
@@ -538,16 +532,14 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 	int *pcs[prog->splits];
 	rsub *subs[prog->splits];
 	char nsubs[rsubsize * (prog->len+3 - prog->splits)];
-	rsub *nsub = (rsub*)nsubs, *matched = NULL, *s1;
-	rsub *freesub = NULL;
-	rthread _clist[prog->len]; 
-	rthread _nlist[prog->len]; 
+	rsub *nsub, *s1, *matched = NULL, *freesub = NULL;
+	rthread _clist[prog->len], _nlist[prog->len];
 	rthread *clist = _clist, *nlist = _nlist, *tmp;
 	gen = prog->gen;
 	goto jmp_start;
 	for(;; sp = _sp) {
-		gen++; uc_len(l, sp) uc_code(c, sp)
-		_sp = sp+l;
+		gen++; uc_len(i, sp) uc_code(c, sp)
+		_sp = sp+i;
 		for(i = 0; i < clistidx; i++) {
 			npc = clist[i].pc;
 			nsub = clist[i].sub;
