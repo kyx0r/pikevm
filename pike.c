@@ -472,7 +472,7 @@ goto next##nn; \
 		pc += 2 + pc[1]; \
 		goto rec##nn; \
 	case SPLIT: \
-		if(plist[pc - insts] == gen) \
+		if (plist[pc - insts] == gen) \
 			deccheck(nn) \
 		plist[pc - insts] = gen; \
 		sub->ref++; \
@@ -480,7 +480,7 @@ goto next##nn; \
 		pcs[i] = pc + pc[-1]; \
 		fastrec(nn, list, listidx) \
 	case RSPLIT: \
-		if(plist[pc - insts] == gen) \
+		if (plist[pc - insts] == gen) \
 			deccheck(nn) \
 		plist[pc - insts] = gen; \
 		sub->ref++; \
@@ -490,10 +490,10 @@ goto next##nn; \
 		fastrec(nn, list, listidx) \
 	case SAVE: \
 		if (sub->ref > 1) { \
+			sub->ref--; \
 			newsub() \
 			for (j = 0; j < nsubp; j++) \
 				s1->sub[j] = sub->sub[j]; \
-			sub->ref--; \
 			sub = s1; \
 			sub->ref = 1; \
 		} \
@@ -537,15 +537,15 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 	rthread *clist = _clist, *nlist = _nlist, *tmp;
 	gen = prog->gen;
 	goto jmp_start;
-	for(;; sp = _sp) {
+	for (;; sp = _sp) {
 		gen++; uc_len(i, sp) uc_code(c, sp)
 		_sp = sp+i;
-		for(i = 0; i < clistidx; i++) {
+		for (i = 0; i < clistidx; i++) {
 			npc = clist[i].pc;
 			nsub = clist[i].sub;
 			switch(*npc++) {
 			case CHAR:
-				if(c != *npc++)
+				if (c != *npc++)
 					break;
 			case ANY:
 			addthread:
@@ -584,8 +584,8 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 		} else if (!clistidx)
 			break;
 	}
-	if(matched) {
-		for(i = 0; i < nsubp; i++)
+	if (matched) {
+		for (i = 0; i < nsubp; i++)
 			subp[i] = matched->sub[i];
 		_return(1)
 	}
@@ -620,17 +620,17 @@ int main(int argc, char *argv[])
 			printf("Done in %f seconds\n", elapsed_time);
 			if (!sz)
 				{ printf("-nomatch-\n"); continue; }
-			for(int k=sub_els; k>0; k--)
-				if(sub[k-1])
+			for (int k=sub_els; k>0; k--)
+				if (sub[k-1])
 					break;
-			for(int l=0; l<sub_els; l+=2) {
+			for (int l=0; l<sub_els; l+=2) {
 				printf("(");
-				if(sub[l] == NULL)
+				if (sub[l] == NULL)
 					printf("?");
 				else
 					printf("%d", (int)(sub[l] - argv[i]));
 				printf(",");
-				if(sub[l+1] == NULL)
+				if (sub[l+1] == NULL)
 					printf("?");
 				else
 					printf("%d", (int)(sub[l+1] - argv[i]));
