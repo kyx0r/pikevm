@@ -424,12 +424,12 @@ int re_comp(rcode *prog, const char *re)
 #define _return(state) \
 { prog->gen = gen + 1; return state; } \
 
-#define newsub() \
+#define newsub(init) \
 s1 = freesub; \
 if (s1) \
 	freesub = (rsub*)s1->sub[0]; \
 else \
-	s1 = (rsub*)&nsubs[rsubsize * subidx++]; \
+	{ s1 = (rsub*)&nsubs[rsubsize * subidx++]; init }\
 
 #define decref(csub) \
 if (--csub->ref == 0) { \
@@ -491,7 +491,7 @@ goto next##nn; \
 	case SAVE: \
 		if (sub->ref > 1) { \
 			sub->ref--; \
-			newsub() \
+			newsub(/*nop*/) \
 			for (j = 0; j < nsubp; j++) \
 				s1->sub[j] = sub->sub[j]; \
 			sub = s1; \
@@ -575,10 +575,8 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 		nlistidx = 0;
 		if (!matched) {
 			jmp_start:
-			newsub()
+			newsub(for(i = 1; i < nsubp; i++) s1->sub[i] = NULL;)
 			s1->ref = 1;
-			for (i = 1; i < nsubp; i++)
-				s1->sub[i] = NULL;
 			s1->sub[0] = _sp;
 			addthread(1, clist, clistidx, insts, s1)
 		} else if (!clistidx)
@@ -625,12 +623,12 @@ int main(int argc, char *argv[])
 					break;
 			for (int l=0; l<sub_els; l+=2) {
 				printf("(");
-				if (sub[l] == NULL)
+				if (sub[l] == NULL || sub[l+1] == NULL)
 					printf("?");
 				else
 					printf("%d", (int)(sub[l] - argv[i]));
 				printf(",");
-				if (sub[l+1] == NULL)
+				if (sub[l+1] == NULL || sub[l] == NULL)
 					printf("?");
 				else
 					printf("%d", (int)(sub[l+1] - argv[i]));
