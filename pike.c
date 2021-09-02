@@ -56,6 +56,7 @@ struct rcode
 	int unilen;
 	int len;
 	int sub;
+	int presub;
 	int splits;
 	int gen;
 	int insts[];
@@ -254,7 +255,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			if (capture) {
 				sub = ++prog->sub;
 				EMIT(PC++, SAVE);
-				EMIT(PC++, 2 * sub);
+				EMIT(PC++, sub);
 				prog->len++;
 			}
 			int res = _compilecode(&re, prog, sizecode);
@@ -263,7 +264,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			if (*re != ')') return RE_SYNTAX_ERROR;
 			if (capture) {
 				EMIT(PC++, SAVE);
-				EMIT(PC++, 2 * sub + 1);
+				EMIT(PC++, sub + prog->presub + 1);
 				prog->len++;
 			}
 			break;
@@ -387,24 +388,26 @@ syntax_error:
 	return RE_SYNTAX_ERROR;
 }
 
-int re_sizecode(const char *re)
+int re_sizecode(const char *re, int *nsub)
 {
 	rcode dummyprog;
 	dummyprog.unilen = 3;
+	dummyprog.sub = 0;
 
 	int res = _compilecode(&re, &dummyprog, /*sizecode*/1);
 	if (res < 0) return res;
 	// If unparsed chars left
 	if (*re) return RE_SYNTAX_ERROR;
-
+	*nsub = dummyprog.sub;
 	return dummyprog.unilen;
 }
 
-int re_comp(rcode *prog, const char *re)
+int re_comp(rcode *prog, const char *re, int nsubs)
 {
 	prog->len = 0;
 	prog->unilen = 0;
 	prog->sub = 0;
+	prog->presub = nsubs;
 	prog->splits = 0;
 	prog->gen = 1;
 
@@ -414,7 +417,7 @@ int re_comp(rcode *prog, const char *re)
 	if (*re) return RE_SYNTAX_ERROR;
 
 	prog->insts[prog->unilen++] = SAVE;
-	prog->insts[prog->unilen++] = 1;
+	prog->insts[prog->unilen++] = prog->sub + 1;
 	prog->insts[prog->unilen++] = MATCH;
 	prog->len += 2;
 
@@ -429,7 +432,7 @@ s1 = freesub; \
 if (s1) \
 	freesub = (rsub*)s1->sub[0]; \
 else \
-	{ s1 = (rsub*)&nsubs[rsubsize * subidx++]; init }\
+	{ s1 = (rsub*)&nsubs[rsubsize * subidx++]; init } \
 
 #define decref(csub) \
 if (--csub->ref == 0) { \
@@ -449,6 +452,16 @@ if (*pc < WBEG) { \
 } \
 subs[i++] = sub; \
 goto next##nn; \
+
+#define save1() \
+newsub(for (j = nsubp / 2; j < nsubp; j++) s1->sub[j] = NULL;) \
+for (j = 0; j < nsubp / 2; j++) \
+	s1->sub[j] = sub->sub[j]; \
+
+#define save2() \
+newsub(/*nop*/) \
+for (j = 0; j < nsubp; j++) \
+	s1->sub[j] = sub->sub[j]; \
 
 #define addthread(nn, list, listidx, _pc, _sub) \
 { \
@@ -491,9 +504,7 @@ goto next##nn; \
 	case SAVE: \
 		if (sub->ref > 1) { \
 			sub->ref--; \
-			newsub(/*nop*/) \
-			for (j = 0; j < nsubp; j++) \
-				s1->sub[j] = sub->sub[j]; \
+			save##nn() \
 			sub = s1; \
 			sub->ref = 1; \
 		} \
@@ -575,7 +586,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 		nlistidx = 0;
 		if (!matched) {
 			jmp_start:
-			newsub(for(i = 1; i < nsubp; i++) s1->sub[i] = NULL;)
+			newsub(for (i = 1; i < nsubp; i++) s1->sub[i] = NULL;)
 			s1->ref = 1;
 			s1->sub[0] = _sp;
 			addthread(1, clist, clistidx, insts, s1)
@@ -583,8 +594,10 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 			break;
 	}
 	if (matched) {
-		for (i = 0; i < nsubp; i++)
-			subp[i] = matched->sub[i];
+		for (i = 0, j = i; i < nsubp; i+=2, j++) {
+			subp[i] = matched->sub[j];
+			subp[i+1] = matched->sub[j+(nsubp/2)];
+		}
 		_return(1)
 	}
 	_return(0)
@@ -596,19 +609,20 @@ int main(int argc, char *argv[])
 		printf("usage: <regex> <str...> <str...> ...\n");
 		return 0;
 	}
-	int sz = re_sizecode(argv[1]) * sizeof(int);
+	int sub_els;
+	int sz = re_sizecode(argv[1], &sub_els) * sizeof(int);
 	printf("Precalculated size: %d\n", sz);
 	char code[(sizeof(rcode)+sz)*2];
 	memset(code+sizeof(rcode)+sz, 0, sizeof(rcode)+sz);
 	rcode *_code = (rcode*)code;
-	if (re_comp(_code, argv[1])) {
+	if (re_comp(_code, argv[1], sub_els)) {
 		printf("Error in re_comp");
 		return 1;
 	}
 	re_dumpcode(_code);
 	#include <time.h>
 	if (argc > 2) {
-		int sub_els = (_code->sub + 1) * 2;
+		sub_els = (sub_els + 1) * 2;
 		const char *sub[sub_els];
 		for (int i = 2; i < argc; i++) {
 			printf("input bytelen: %ld\n", strlen(argv[i]));
