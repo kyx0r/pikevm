@@ -537,18 +537,12 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 {
 	int i, j, c, gen, subidx = 1, *npc;
 	int rsubsize = sizeof(rsub)+(sizeof(char*)*nsubp);
-	int nsubssize = rsubsize * (prog->len+3 - prog->splits);
-	int clistidx = 0, nlistidx = 0;
+	int clistidx = 0, nlistidx = 0, pclistidx;
 	const char *sp = s, *_sp = s;
 	int *insts = prog->insts;
 	int *pcs[prog->splits];
 	rsub *subs[prog->splits];
-	/* Although worst case scenario nsubs size is prog->len,
-	with moderate sized regexes it is easy to stack overflow
-	here. Most of the time only very small portion of memory
-	is actually used, but it is necessary to cover all cases
-	and posible paths, as it is nondeterministic. */
-	char nsubs[nsubssize > 500000 ? 500000 : nsubssize];
+	char nsubs[rsubsize * 512];
 	rsub *nsub, *s1, *matched = NULL, *freesub = NULL;
 	rthread _clist[prog->len], _nlist[prog->len];
 	rthread *clist = _clist, *nlist = _nlist, *tmp;
@@ -590,8 +584,11 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 		nlist = tmp;
 		clistidx = nlistidx;
 		nlistidx = 0;
-		if (!matched) {
+		if (clistidx != 1 && !matched) {
+			if (!clistidx && pclistidx)
+				_sp = sp;
 			jmp_start:
+			pclistidx = nlistidx;
 			newsub(for (i = 1; i < nsubp; i++) s1->sub[i] = NULL;, /*nop*/)
 			s1->ref = 1;
 			s1->sub[0] = _sp;
@@ -599,6 +596,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 			addthread(1, clist, clistidx)
 		} else if (!clistidx)
 			break;
+		pclistidx = clistidx;
 	}
 	if (matched) {
 		for (i = 0, j = i; i < nsubp; i+=2, j++) {
