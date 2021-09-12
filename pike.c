@@ -227,6 +227,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			PC++; // Skip "# of pairs" byte
 			prog->len++;
 			for (cnt = 0; *re != ']'; cnt++) {
+				if (*re == '\\') re++;
 				if (!*re) goto syntax_error;
 				uc_code(c, re) EMIT(PC++, c);
 				uc_len(c, re)
