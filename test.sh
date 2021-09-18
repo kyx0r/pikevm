@@ -114,6 +114,7 @@ qwerty.*$
 (.+)(.+)
 a(?:b|c|d){4,5}(.)
 (?:c|d)(?:)(?:a(?:)(?:b)(?:b(?:))(?:b(?:)(?:b)))
+\\\\<abc
 "
 input="\
 abcdef
@@ -229,6 +230,7 @@ abaaa
 abcd
 acdbcdbe
 cabbbb
+dabc
 "
 expect="\
 (0,3)
@@ -344,6 +346,7 @@ expect="\
 (0,4)(0,3)(3,4)
 (0,7)(6,7)
 (0,6)
+-nomatch-
 (0,0)
 "
 
