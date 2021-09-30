@@ -308,6 +308,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 					case RSPLIT:
 					case SAVE:
 					case CHAR:
+					case ANY:
 						i++;
 						icnt++;
 					}
