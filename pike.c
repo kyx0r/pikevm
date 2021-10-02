@@ -185,6 +185,9 @@ void re_dumpcode(rcode *prog)
 	printf("Unilen: %d, insts: %d\n", prog->unilen, prog->len);
 }
 
+/* next todo: crack and factor out this recursion,
+no recursion will allow to make a meta macro out
+of this, such that re_sizecode() becomes efficient */
 static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 {
 	const char *re = *re_loc;
