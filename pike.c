@@ -187,7 +187,8 @@ void re_dumpcode(rcode *prog)
 
 /* next todo: crack and factor out this recursion,
 no recursion will allow to make a meta macro out
-of this, such that re_sizecode() becomes efficient */
+of this, such that re_sizecode() becomes efficient
+difficulty: very high, probably not any time soon */
 static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 {
 	const char *re = *re_loc;
@@ -316,8 +317,8 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 						i++;
 						icnt++;
 					}
+				prog->len += maxcnt * icnt;
 			}
-			prog->len += maxcnt * icnt;
 			break;
 		case '?':
 			if (PC == term) goto syntax_error;
@@ -390,7 +391,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 		}
 		uc_len(c, re) re += c;
 	}
-	if (alt_label) {
+	if (code && alt_label) {
 		EMIT(alt_label, REL(alt_label, PC) + 1);
 		for (int alts = altc; altc; altc--) {
 			int at = alt_stack[alts-altc]+altc*3;

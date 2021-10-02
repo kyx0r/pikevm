@@ -34,6 +34,7 @@ so that the user does not need to waste time taking strlen()
 * Support for repetition operator {n} and {n,m}.
 * Support for Unicode (UTF-8).
 * Unlike other engines, the output is byte level offset. (Which is more useful)
+* Support for non capture group ?:
 * Support for wordend & wordbeg assertions
 - Some limitations for word assertions are meta chars like spaces being used
 in for expression itself, for example "\< abc" should match " abc" exactly at
