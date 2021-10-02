@@ -191,6 +191,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 	int *code = sizecode ? NULL : prog->insts;
 	int start = PC, term = PC;
 	int alt_label = 0, c;
+	int alt_stack[5000], altc = 0;
 
 	for (; *re && *re != ')';) {
 		switch (*re) {
@@ -362,7 +363,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			break;
 		case '|':
 			if (alt_label)
-				EMIT(alt_label, REL(alt_label, PC) + 1);
+				alt_stack[altc++] = alt_label;
 			INSERT_CODE(start, 3, PC);
 			EMIT(PC++, JMP);
 			alt_label = PC++;
@@ -386,8 +387,13 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 		}
 		uc_len(c, re) re += c;
 	}
-	if (alt_label)
+	if (alt_label) {
 		EMIT(alt_label, REL(alt_label, PC) + 1);
+		for (int alts = altc; altc; altc--) {
+			int at = alt_stack[alts-altc]+altc*3;
+			EMIT(at, REL(at, PC) + 1);
+		}
+	}
 	*re_loc = re;
 	return RE_SUCCESS;
 syntax_error:
