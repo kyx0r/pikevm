@@ -53,7 +53,7 @@ NOTES
 The problem described in this paper has been fixed. Ambiguous matching is correct.
 HISTORY:
 https://re2c.org/2019_borsotti_trofimovich_efficient_posix_submatch_extraction_on_nfa.pdf
-Cox, 2009 (incorrect). Cox came up with the idea of backward POSIX matching, 
+"Cox, 2009 (incorrect). Cox came up with the idea of backward POSIX matching, 
 which is based on the observation that reversing the longest-match rule 
 simplifies the handling of iteration subexpressions: instead of maximizing 
 submatch from the first to the last iteration, one needs to maximize the 
@@ -82,7 +82,16 @@ algorithm is interesting: if somehow the delayed comparison problem was fixed,
 it would work.  The algorithm requires O(mt) memory and O(nm^2t) time
 (assuming a worst-case optimal closure algorithm), where n is the
 length of input, m it the size of RE and t is the number of submatch groups 
-and subexpressions that contain them.
+and subexpressions that contain them."
+This worst case scenario can only happen on ambiguous input, that is why nsubs
+size is set to half a MB just in case, this can match 5000000 
+ambiguous consumers (char, class, any) assuming t is 1. In practice there
+is almost never a situation where someone wants to search using regex this
+large. Use of alloca() instead of VLA, could remove this limit, I just wish
+it was standardized. If you ever wondered about a situation where alloca
+is a must, this is the algorithm.
+Research has shown that it is possible to disambiguate NFA in polynomial time
+but it brings serious performance issues on non ambiguous inputs.
 
 Author and License
 ==================
