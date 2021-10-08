@@ -31,7 +31,8 @@ so that the user does not need to waste time taking strlen()
 * Highly optimized source code, probably 2x faster than re1.5
 * Support for quoted chars in regex. Escapes in brackets.
 * Support for ^, $ assertions in regex.
-* Support for repetition operator {n} and {n,m}.
+* Support for repetition operator {n} and {n,m} and {n,}.
+- Note: cases with 0 are not handled, avoid them, they can easily be replaced.
 * Support for Unicode (UTF-8).
 * Unlike other engines, the output is byte level offset. (Which is more useful)
 * Support for non capture group ?:

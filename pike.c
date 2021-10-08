@@ -125,10 +125,10 @@ static int re_classmatch(const int *pc, int c)
 
 void re_dumpcode(rcode *prog)
 {
-	int pc = 0;
+	int pc = 0, i = 0;
 	int *code = prog->insts;
 	while (pc < prog->unilen) {
-		printf("%4d: ", pc);
+		printf("%4d: ", pc); i++;
 		switch(code[pc++]) {
 		default:
 			pc = prog->unilen;
@@ -182,7 +182,7 @@ void re_dumpcode(rcode *prog)
 			break;
 		}
 	}
-	printf("Unilen: %d, insts: %d\n", prog->unilen, prog->len);
+	printf("Unilen: %d, insts: %d, counted insts: %d\n", prog->unilen, prog->len, i);
 }
 
 /* next todo: crack and factor out this recursion,
@@ -276,14 +276,14 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			break;
 		case '{':;
 			int maxcnt = 0, mincnt = 0,
-			i = 0, icnt = 0, size;
+			i = 0, icnt = 0, inf = 0, size;
 			re++;
 			while (isdigit((unsigned char) *re))
 				mincnt = mincnt * 10 + *re++ - '0';
 			if (*re == ',') {
 				re++;
 				if (*re == '}')
-					maxcnt = 256;
+					inf = 1;
 				while (isdigit((unsigned char) *re))
 					maxcnt = maxcnt * 10 + *re++ - '0';
 			} else
@@ -293,12 +293,21 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 					memcpy(&code[PC], &code[term], size*sizeof(int));
 				PC += size;
 			}
-			for (i = maxcnt-mincnt; i > 0; i--)
-			{
+			if (inf) {
+				EMIT(PC, RSPLIT);
+				EMIT(PC+1, REL(PC, PC - size -1));
+				EMIT(PC+2, 0);
+				PC += 3;
+				prog->len++;
 				prog->splits++;
+				maxcnt = mincnt;
+			}
+			for (i = maxcnt-mincnt; i > 0; i--) {
 				EMIT(PC++, SPLIT);
 				EMIT(PC++, REL(PC-1, PC+((size+3)*i)));
 				EMIT(PC++, 0);
+				prog->splits++;
+				prog->len++;
 				if (code)
 					memcpy(&code[PC], &code[term], size*sizeof(int));
 				PC += size;
@@ -313,11 +322,11 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 					case RSPLIT:
 					case SAVE:
 					case CHAR:
-					case ANY:
 						i++;
+					case ANY:
 						icnt++;
 					}
-				prog->len += maxcnt * icnt;
+				prog->len += (maxcnt-1) * icnt;
 			}
 			break;
 		case '?':
