@@ -94,6 +94,53 @@ is a must, this is the algorithm.
 Research has shown that it is possible to disambiguate NFA in polynomial time
 but it brings serious performance issues on non ambiguous inputs.
 
+This pikevm features an improved submatch extraction
+algorithm based on Russ Cox's original design. 
+I - Kyryl Melekhin have found a way to optimize the tracking
+properly of 1st number in the submatch pair. Based on simple
+observation of how the NFA is constructed I noticed that
+there is no way for addthread1() to ever reach inner SAVE
+instructions in the regex, so that leaves tracking 2nd pairs by
+addthread1() irrelevant to the final results (except the need to 
+initialize the sub after allocation). This improved the overall 
+performance by 25% which is massive considering that at the 
+time there was nothing else left to can be done to make it faster.
+
+What are on##list macros?
+Redundant state inside nlist can happen in couple of
+ways, and has to do with the (closure) a* (star) operations and
+also +. Due to the automata machine design split happens
+to be above the next consumed instruction and if that
+state gets added onto the list we may segfault or give
+wrong submatch result. Rsplit does not have this problem
+because it is generated below the consumer instruction, but
+it can still add redundant states. Overall this is extremely
+difficult to understand or explain, but this is just something
+we have to check for. We checked for this using extra int inside
+the split instructions, so this left some global state inside the
+machine insts. Most of the time we just added to the next
+gen number and kept incrementing it forever. This leaves a small
+chance of overflowing the int and getting a run on a false state
+left from previous use of the regex. Though if overflow never
+happens there is no chance of getting a false state. Overflows
+like this pose a high security threat, if the hacker knows
+how many cycles he needs to overflow the gen varible and get
+inconsistent result. It is possible to reset the marks if we
+near the overflow, but as you may guess that does not come
+for free.
+
+Currently I removed all dynamic global state from the instructions
+fixing any overlow issue at the cost of slight overhead of needing
+to look though the nlist states, to prevent their readdition. This
+solution is still fast because it affects only nlist + split run on
+so most other uses of regex don't suffer big performace penalty.
+This does not solve the ambiguity problem with multible
+continuous states though. Finding a fast solution for continuous
+ambiguity is the last thing preventing me to call this regex engine
+PERFECT and limitation free. While yet, this is to be invented it
+takes a big deal of genius and creativity to make new algorithms
+or find improvements in what we already know.
+
 Author and License
 ==================
 licensed under BSD license, just as the original re1.

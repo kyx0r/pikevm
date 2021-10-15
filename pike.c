@@ -58,7 +58,6 @@ struct rcode
 	int sub;
 	int presub;
 	int splits;
-	int gen;
 	int insts[];
 };
 
@@ -93,6 +92,7 @@ typedef struct rsub rsub;
 struct rsub
 {
 	int ref;
+	rsub *freesub;
 	const char *sub[];
 };
 
@@ -134,12 +134,12 @@ void re_dumpcode(rcode *prog)
 			pc = prog->unilen;
 			break;
 		case SPLIT:
-			printf("split %d (%d)\n", pc + code[pc] + 2, code[pc]);
-			pc+=2;
+			printf("split %d (%d)\n", pc + code[pc] + 1, code[pc]);
+			pc++;
 			break;
 		case RSPLIT:
-			printf("rsplit %d (%d)\n", pc + code[pc] + 2, code[pc]);
-			pc+=2;
+			printf("rsplit %d (%d)\n", pc + code[pc] + 1, code[pc]);
+			pc++;
 			break;
 		case JMP:
 			printf("jmp %d (%d)\n", pc + code[pc] + 1, code[pc]);
@@ -295,17 +295,15 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			}
 			if (inf) {
 				EMIT(PC, RSPLIT);
-				EMIT(PC+1, REL(PC, PC - size -1));
-				EMIT(PC+2, 0);
-				PC += 3;
+				EMIT(PC+1, REL(PC, PC - size));
+				PC += 2;
 				prog->len++;
 				prog->splits++;
 				maxcnt = mincnt;
 			}
 			for (i = maxcnt-mincnt; i > 0; i--) {
 				EMIT(PC++, SPLIT);
-				EMIT(PC++, REL(PC-1, PC+((size+3)*i)));
-				EMIT(PC++, 0);
+				EMIT(PC++, REL(PC, PC+((size+2)*i)));
 				prog->splits++;
 				prog->len++;
 				if (code)
@@ -331,21 +329,20 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			break;
 		case '?':
 			if (PC == term) goto syntax_error;
-			INSERT_CODE(term, 3, PC);
+			INSERT_CODE(term, 2, PC);
 			if (re[1] == '?') {
 				EMIT(term, RSPLIT);
 				re++;
 			} else
 				EMIT(term, SPLIT);
-			EMIT(term + 1, REL(term, PC-1));
-			EMIT(term + 2, 0);
+			EMIT(term + 1, REL(term, PC));
 			prog->len++;
 			prog->splits++;
 			term = PC;
 			break;
 		case '*':
 			if (PC == term) goto syntax_error;
-			INSERT_CODE(term, 3, PC);
+			INSERT_CODE(term, 2, PC);
 			EMIT(PC, JMP);
 			EMIT(PC + 1, REL(PC, term));
 			PC += 2;
@@ -354,8 +351,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 				re++;
 			} else
 				EMIT(term, SPLIT);
-			EMIT(term + 1, REL(term, PC-1));
-			EMIT(term + 2, 0);
+			EMIT(term + 1, REL(term, PC));
 			prog->splits++;
 			prog->len += 2;
 			term = PC;
@@ -367,9 +363,8 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 				re++;
 			} else
 				EMIT(PC, RSPLIT);
-			EMIT(PC + 1, REL(PC-1, term));
-			EMIT(PC + 2, 0);
-			PC += 3;
+			EMIT(PC + 1, REL(PC, term));
+			PC += 2;
 			prog->splits++;
 			prog->len++;
 			term = PC;
@@ -377,12 +372,11 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 		case '|':
 			if (alt_label)
 				alt_stack[altc++] = alt_label;
-			INSERT_CODE(start, 3, PC);
+			INSERT_CODE(start, 2, PC);
 			EMIT(PC++, JMP);
 			alt_label = PC++;
 			EMIT(start, SPLIT);
-			EMIT(start + 1, REL(start, PC-1));
-			EMIT(start + 2, 0);
+			EMIT(start + 1, REL(start, PC));
 			prog->splits++;
 			prog->len += 2;
 			term = PC;
@@ -403,7 +397,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 	if (code && alt_label) {
 		EMIT(alt_label, REL(alt_label, PC) + 1);
 		for (int alts = altc; altc; altc--) {
-			int at = alt_stack[alts-altc]+altc*3;
+			int at = alt_stack[alts-altc]+altc*2;
 			EMIT(at, REL(at, PC) + 1);
 		}
 	}
@@ -435,7 +429,6 @@ int re_comp(rcode *prog, const char *re, int nsubs)
 	prog->sub = 0;
 	prog->presub = nsubs;
 	prog->splits = 0;
-	prog->gen = 1;
 
 	int res = _compilecode(&re, prog, /*sizecode*/0);
 	if (res < 0) return res;
@@ -450,27 +443,32 @@ int re_comp(rcode *prog, const char *re, int nsubs)
 	return RE_SUCCESS;
 }
 
-#define _return(state) \
-{ prog->gen = gen + 1; return state; } \
-
 #define newsub(init, copy) \
 if (freesub) \
-	{ s1 = freesub; freesub = (rsub*)s1->sub[0]; copy } \
+	{ s1 = freesub; freesub = s1->freesub; copy } \
 else \
 	{ s1 = (rsub*)&nsubs[suboff+=rsubsize]; init } \
 
 #define decref(csub) \
 if (--csub->ref == 0) { \
-	csub->sub[0] = (char*)freesub; \
+	csub->freesub = freesub; \
 	freesub = csub; \
 } \
 
 #define deccheck(nn) \
 { decref(nsub) goto rec_check##nn; } \
 
+#define onnlist(nn, list, listidx, when, pre) \
+when for (j = 0; j < listidx; j++) \
+	if (npc == list[j].pc) \
+		{ pre deccheck(nn) } \
+
+#define onclist(nn, list, listidx, i, pre) \
+
 #define fastrec(nn, list, listidx) \
 nsub->ref++; \
 if (*npc < WBEG) { \
+	on##list(nn, list, listidx, /*nop*/, subs[i++] = nsub;) \
 	list[listidx].sub = nsub; \
 	list[listidx++].pc = npc; \
 	npc = pcs[i]; \
@@ -487,18 +485,12 @@ memcpy(s1->sub, nsub->sub, osubp / 2);) \
 newsub(/*nop*/, /*nop*/) \
 memcpy(s1->sub, nsub->sub, osubp); \
 
-#define onnlist(nn) \
-if (npc[2] == gen) \
-	deccheck(nn) \
-npc[2] = gen; \
-
-#define onclist(nn) /* nop */ \
-
 #define addthread(nn, list, listidx) \
 { \
 	int i = 0; \
 	rec##nn: \
 	if (*npc < WBEG) { \
+		on##list(nn, list, listidx, if (i), /*nop*/) \
 		list[listidx].sub = nsub; \
 		list[listidx++].pc = npc; \
 		rec_check##nn: \
@@ -515,15 +507,13 @@ npc[2] = gen; \
 		npc += 2 + npc[1]; \
 		goto rec##nn; \
 	case SPLIT: \
-		on##list(nn) \
-		npc += 3; \
-		pcs[i] = npc + npc[-2]; \
+		npc += 2; \
+		pcs[i] = npc + npc[-1]; \
 		fastrec(nn, list, listidx) \
 	case RSPLIT: \
-		on##list(nn) \
-		npc += 3; \
+		npc += 2; \
 		pcs[i] = npc; \
-		npc += npc[-2]; \
+		npc += npc[-1]; \
 		fastrec(nn, list, listidx) \
 	case SAVE: \
 		if (nsub->ref > 1) { \
@@ -547,7 +537,7 @@ npc[2] = gen; \
 	case BOL: \
 		if (_sp != s) { \
 			if (!i && !listidx) \
-				_return(0) \
+				return 0; \
 			deccheck(nn) \
 		} \
 		npc++; goto rec##nn; \
@@ -561,7 +551,7 @@ npc[2] = gen; \
 int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 {
 	int rsubsize = sizeof(rsub)+(sizeof(char*)*nsubp);
-	int i, j, c, gen, suboff = rsubsize, *npc;
+	int i, j, c, suboff = rsubsize, *npc;
 	int clistidx = 0, nlistidx = 0, osubp = nsubp * sizeof(char*);
 	const char *sp = s, *_sp = s;
 	int *insts = prog->insts;
@@ -571,10 +561,9 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 	rsub *nsub, *s1, *matched = NULL, *freesub = NULL;
 	rthread _clist[prog->len], _nlist[prog->len];
 	rthread *clist = _clist, *nlist = _nlist, *tmp;
-	gen = prog->gen;
 	goto jmp_start;
 	for (;; sp = _sp) {
-		gen++; uc_len(i, sp) uc_code(c, sp)
+		uc_len(i, sp) uc_code(c, sp)
 		_sp = sp+i;
 		for (i = 0; i < clistidx; i++) {
 			npc = clist[i].pc;
@@ -625,9 +614,9 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 			subp[i] = matched->sub[j];
 			subp[i+1] = matched->sub[nsubp / 2 + j];
 		}
-		_return(1)
+		return 1;
 	}
-	_return(0)
+	return 0;
 }
 
 int main(int argc, char *argv[])
