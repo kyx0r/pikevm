@@ -92,7 +92,6 @@ typedef struct rsub rsub;
 struct rsub
 {
 	int ref;
-	rsub *freesub;
 	const char *sub[];
 };
 
@@ -311,19 +310,22 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 				PC += size;
 			}
 			if (code) {
+				mincnt = 0;
 				for (i = 0; i < size; i++)
 					switch (code[term+i]) {
+					case SPLIT:
+					case RSPLIT:
+						mincnt++;
 					case CLASS:
 						i += code[term+i+2] * 2 + 1;
 					case JMP:
-					case SPLIT:
-					case RSPLIT:
 					case SAVE:
 					case CHAR:
 						i++;
 					case ANY:
 						icnt++;
 					}
+				prog->splits += mincnt * icnt;
 				prog->len += (maxcnt-1) * icnt;
 			}
 			break;
@@ -445,13 +447,13 @@ int re_comp(rcode *prog, const char *re, int nsubs)
 
 #define newsub(init, copy) \
 if (freesub) \
-	{ s1 = freesub; freesub = s1->freesub; copy } \
+	{ s1 = freesub; freesub = (rsub*)s1->sub[0]; copy } \
 else \
 	{ s1 = (rsub*)&nsubs[suboff+=rsubsize]; init } \
 
 #define decref(csub) \
 if (--csub->ref == 0) { \
-	csub->freesub = freesub; \
+	csub->sub[0] = (char*)freesub; \
 	freesub = csub; \
 } \
 
