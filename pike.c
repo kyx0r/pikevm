@@ -458,17 +458,17 @@ if (--csub->ref == 0) { \
 #define deccheck(nn) \
 { decref(nsub) goto rec_check##nn; } \
 
-#define onnlist(nn, list, listidx, when, pre) \
-when for (j = 0; j < listidx; j++) \
-	if (npc == list[j].pc) \
-		{ pre deccheck(nn) } \
+#define onnlist(nn) \
+for (j = 0; j < plistidx; j++) \
+	if (npc == plist[j]) \
+		deccheck(nn) \
+plist[plistidx++] = npc; \
 
-#define onclist(nn, list, listidx, i, pre) \
+#define onclist(nn) \
 
 #define fastrec(nn, list, listidx) \
 nsub->ref++; \
 if (*npc < WBEG) { \
-	on##list(nn, list, listidx, /*nop*/, subs[i++] = nsub;) \
 	list[listidx].sub = nsub; \
 	list[listidx++].pc = npc; \
 	npc = pcs[i]; \
@@ -490,7 +490,6 @@ memcpy(s1->sub, nsub->sub, osubp); \
 	int i = 0; \
 	rec##nn: \
 	if (*npc < WBEG) { \
-		on##list(nn, list, listidx, if (i), /*nop*/) \
 		list[listidx].sub = nsub; \
 		list[listidx++].pc = npc; \
 		rec_check##nn: \
@@ -507,10 +506,12 @@ memcpy(s1->sub, nsub->sub, osubp); \
 		npc += 2 + npc[1]; \
 		goto rec##nn; \
 	case SPLIT: \
+		on##list(nn) \
 		npc += 2; \
 		pcs[i] = npc + npc[-1]; \
 		fastrec(nn, list, listidx) \
 	case RSPLIT: \
+		on##list(nn) \
 		npc += 2; \
 		pcs[i] = npc; \
 		npc += npc[-1]; \
@@ -551,11 +552,11 @@ memcpy(s1->sub, nsub->sub, osubp); \
 int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 {
 	int rsubsize = sizeof(rsub)+(sizeof(char*)*nsubp);
-	int i, j, c, suboff = rsubsize, *npc;
-	int clistidx = 0, nlistidx = 0, osubp = nsubp * sizeof(char*);
+	int i, j, c, suboff = rsubsize, *npc, osubp = nsubp * sizeof(char*);
+	int clistidx = 0, nlistidx = 0, plistidx = 0;
 	const char *sp = s, *_sp = s;
 	int *insts = prog->insts;
-	int *pcs[prog->splits];
+	int *pcs[prog->splits], *plist[prog->splits];
 	rsub *subs[prog->splits];
 	char nsubs[500000];
 	rsub *nsub, *s1, *matched = NULL, *freesub = NULL;
@@ -597,14 +598,13 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 		clist = nlist;
 		nlist = tmp;
 		clistidx = nlistidx;
-		nlistidx = 0;
+		nlistidx = 0; plistidx = 0;
 		if (!matched) {
 			jmp_start:
 			newsub(memset(s1->sub, 0, osubp);, /*nop*/)
 			s1->ref = 1;
 			s1->sub[0] = _sp;
-			nsub = s1;
-			npc = insts;
+			nsub = s1; npc = insts;
 			addthread(1, clist, clistidx)
 		} else if (!clistidx)
 			break;

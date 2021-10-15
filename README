@@ -124,7 +124,7 @@ chance of overflowing the int and getting a run on a false state
 left from previous use of the regex. Though if overflow never
 happens there is no chance of getting a false state. Overflows
 like this pose a high security threat, if the hacker knows
-how many cycles he needs to overflow the gen varible and get
+how many cycles he needs to overflow the gen variable and get
 inconsistent result. It is possible to reset the marks if we
 near the overflow, but as you may guess that does not come
 for free.
