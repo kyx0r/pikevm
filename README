@@ -125,8 +125,8 @@ it was standardized. If you ever wondered about a situation where alloca
 is a must, this is the algorithm.
 Most of the time memory usage is very low and the space
 complexity for non ambigious regex is O(nt) where n is
-the number of alternate paths in the regex and t is the
-number of submatch groups.
+the number of currently considering alternate paths
+in the regex and t is the number of submatch groups.
 
 This pikevm features an improved submatch extraction
 algorithm based on Russ Cox's original design. 
@@ -168,8 +168,8 @@ fixing any overlow issue at the cost of slight overhead of needing
 to look though the nlist states, to prevent their readdition. This
 solution is still fast because it affects only nlist + split run on
 so most other uses of regex don't suffer big performace penalty.
-This does not solve the ambiguity problem with multible
-continuous states though. Finding a fast solution for continuous
+This does not solve the ambiguity problem with multiple
+continuous states though. Finding a fast O(1) solution for continuous
 ambiguity is the last thing preventing me to call this regex engine
 PERFECT and limitation free. While yet, this is to be invented it
 takes a big deal of genius and creativity to make new algorithms
