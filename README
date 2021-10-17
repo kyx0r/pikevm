@@ -84,6 +84,38 @@ it would work.  The algorithm requires O(mt) memory and O(nm^2t) time
 (assuming a worst-case optimal closure algorithm), where n is the
 length of input, m it the size of RE and t is the number of submatch groups 
 and subexpressions that contain them."
+
+Research has shown that it is possible to disambiguate NFA in polynomial time
+but it brings serious performance issues on non ambiguous inputs.
+See the branch "disambiguate_paths" on this repo shows what is being
+done to solve it and the potential performance costs. In short it
+requires tracking the parent of every state added on nlist from clist.
+If the state from nlist matches the consumer, the alternative clist
+state related to that nlist state gets discarded and the nsub ref
+can be decremented (freed). The reason why this problem does not
+exist for non ambiguous regexes is because the alternative clist
+state will never match due to the next state having a different
+consumer. There is no need for any extra handling it gets freed normally.
+I decided to not apply this solution here because I think
+most use cases for regex are not ambiguious like say regex:
+"a{10000}". If you try matching 10000 'a' characters in a row
+like that you will have a problem where the stack usage will
+jump up to 10000*(subsize) but it will never exceed the size
+of regex though, but the number of NFA states will also increase
+by the same amount, so at the charater 9999 you will find
+9999 redundant nlist states, that will degrade performance
+linearly, however it will be very slow compared to uplimited
+regex like a+. The cost of this solution is somewhere around
+2% general performance decrease (broadly), but a magnitude of 
+complexity decrease for ambiguous cases, for example
+matching 64 characters went down from 30 to 9 microseconds.
+Another solution to this problem can be to determine the
+ambiguous paths at compile time and flag the inner
+states as ambiguous ahead of time, still this can't avoid
+having a loop though the alt states as their positioning
+in clist can't be precomputed due to the dynamic changes.
+
+(Comment about O(mt) memory complexity)
 This worst case scenario can only happen on ambiguous input, that is why nsubs
 size is set to half a MB just in case, this can match 5000000 
 ambiguous consumers (char, class, any) assuming t is 1. In practice there
@@ -91,8 +123,10 @@ is almost never a situation where someone wants to search using regex this
 large. Use of alloca() instead of VLA, could remove this limit, I just wish
 it was standardized. If you ever wondered about a situation where alloca
 is a must, this is the algorithm.
-Research has shown that it is possible to disambiguate NFA in polynomial time
-but it brings serious performance issues on non ambiguous inputs.
+Most of the time memory usage is very low and the space
+complexity for non ambigious regex is O(nt) where n is
+the number of alternate paths in the regex and t is the
+number of submatch groups.
 
 This pikevm features an improved submatch extraction
 algorithm based on Russ Cox's original design. 
