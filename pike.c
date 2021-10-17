@@ -98,6 +98,7 @@ struct rsub
 typedef struct rthread rthread;
 struct rthread
 {
+	int *pa;
 	int *pc;
 	rsub *sub;
 };
@@ -460,6 +461,10 @@ if (--csub->ref == 0) { \
 #define deccheck(nn) \
 { decref(nsub) goto rec_check##nn; } \
 
+#define onambgnlist(list, listidx) list[listidx].pa = parent; \
+
+#define onambgclist(list, listidx) \
+
 #define onnlist(nn) \
 for (j = 0; j < plistidx; j++) \
 	if (npc == plist[j]) \
@@ -471,12 +476,13 @@ plist[plistidx++] = npc; \
 #define fastrec(nn, list, listidx) \
 nsub->ref++; \
 if (*npc < WBEG) { \
+	onambg##list(list, listidx) \
 	list[listidx].sub = nsub; \
 	list[listidx++].pc = npc; \
-	npc = pcs[i]; \
+	npc = pcs[si]; \
 	goto rec##nn; \
 } \
-subs[i++] = nsub; \
+subs[si++] = nsub; \
 goto next##nn; \
 
 #define saveclist() \
@@ -489,15 +495,16 @@ memcpy(s1->sub, nsub->sub, osubp); \
 
 #define addthread(nn, list, listidx) \
 { \
-	int i = 0; \
+	int si = 0; \
 	rec##nn: \
 	if (*npc < WBEG) { \
+		onambg##list(list, listidx) \
 		list[listidx].sub = nsub; \
 		list[listidx++].pc = npc; \
 		rec_check##nn: \
-		if (i) { \
-			npc = pcs[--i]; \
-			nsub = subs[i]; \
+		if (si) { \
+			npc = pcs[--si]; \
+			nsub = subs[si]; \
 			goto rec##nn; \
 		} \
 		continue; \
@@ -510,12 +517,12 @@ memcpy(s1->sub, nsub->sub, osubp); \
 	case SPLIT: \
 		on##list(nn) \
 		npc += 2; \
-		pcs[i] = npc + npc[-1]; \
+		pcs[si] = npc + npc[-1]; \
 		fastrec(nn, list, listidx) \
 	case RSPLIT: \
 		on##list(nn) \
 		npc += 2; \
-		pcs[i] = npc; \
+		pcs[si] = npc; \
 		npc += npc[-1]; \
 		fastrec(nn, list, listidx) \
 	case SAVE: \
@@ -539,7 +546,7 @@ memcpy(s1->sub, nsub->sub, osubp); \
 		npc++; goto rec##nn; \
 	case BOL: \
 		if (_sp != s) { \
-			if (!i && !listidx) \
+			if (!si && !listidx) \
 				return 0; \
 			deccheck(nn) \
 		} \
@@ -555,19 +562,22 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 {
 	int rsubsize = sizeof(rsub)+(sizeof(char*)*nsubp);
 	int i, j, c, suboff = rsubsize, *npc, osubp = nsubp * sizeof(char*);
-	int clistidx = 0, nlistidx = 0, plistidx = 0;
+	int clistidx = 0, nlistidx = 0, plistidx, nalts;
 	const char *sp = s, *_sp = s;
-	int *insts = prog->insts;
+	int *insts = prog->insts, *parent;
 	int *pcs[prog->splits], *plist[prog->splits];
 	rsub *subs[prog->splits];
-	char nsubs[500000];
+	char nsubs[rsubsize * 256];
 	rsub *nsub, *s1, *matched = NULL, *freesub = NULL;
 	rthread _clist[prog->len], _nlist[prog->len];
 	rthread *clist = _clist, *nlist = _nlist, *tmp;
+	int nullinst = 0;
 	goto jmp_start;
 	for (;; sp = _sp) {
 		uc_len(i, sp) uc_code(c, sp)
 		_sp = sp+i;
+		nalts = clistidx - nlistidx;
+		nlistidx = 0; plistidx = 0;
 		for (i = 0; i < clistidx; i++) {
 			npc = clist[i].pc;
 			nsub = clist[i].sub;
@@ -577,6 +587,17 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 					break;
 			case ANY:
 			addthread:
+				if (i >= clistidx - nalts)
+					parent = clist[i].pc;
+				else {
+					parent = clist[i].pa;
+					for (j = clistidx - nalts; j < clistidx; j++) {
+						if (parent == clist[j].pc) {
+							clist[j].pc = &nullinst;
+							break;
+						}
+					}
+				}
 				addthread(2, nlist, nlistidx)
 			case CLASS:
 				if (!re_classmatch(npc, c))
@@ -600,7 +621,6 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 		clist = nlist;
 		nlist = tmp;
 		clistidx = nlistidx;
-		nlistidx = 0; plistidx = 0;
 		if (!matched) {
 			jmp_start:
 			newsub(memset(s1->sub, 0, osubp);, /*nop*/)
