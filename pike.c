@@ -465,14 +465,6 @@ if (--csub->ref == 0) { \
 
 #define onambgclist(list, listidx) \
 
-#define onnlist(nn) \
-for (j = 0; j < plistidx; j++) \
-	if (npc == plist[j]) \
-		deccheck(nn) \
-plist[plistidx++] = npc; \
-
-#define onclist(nn) \
-
 #define fastrec(nn, list, listidx) \
 nsub->ref++; \
 if (*npc < WBEG) { \
@@ -493,6 +485,42 @@ memcpy(s1->sub, nsub->sub, osubp / 2);) \
 newsub(/*nop*/, /*nop*/) \
 memcpy(s1->sub, nsub->sub, osubp); \
 
+#define endnlist() if (*npc == MATCH) nmatch = 1; \
+
+#define endclist() \
+
+#define instclist(nn) \
+case WBEG: \
+        if (((sp != s || sp != _sp) && isword(sp)) \
+                        || !isword(_sp)) \
+                deccheck(nn) \
+        npc++; goto rec##nn; \
+case BOL: \
+        if (_sp != s) { \
+                if (!si && !clistidx) \
+                        return 0; \
+                deccheck(nn) \
+        } \
+        npc++; goto rec##nn; \
+
+#define instnlist(nn) \
+case JMP: \
+        npc += 2 + npc[1]; \
+        goto rec##nn; \
+case RSPLIT: \
+        npc += 2; \
+        pcs[si] = npc; \
+        npc += npc[-1]; \
+        fastrec(nn, nlist, nlistidx) \
+case WEND: \
+        if (isword(_sp)) \
+                deccheck(nn) \
+        npc++; goto rec##nn; \
+case EOL: \
+        if (*_sp) \
+                deccheck(nn) \
+        npc++; goto rec##nn; \
+
 #define addthread(nn, list, listidx) \
 { \
 	int si = 0; \
@@ -507,23 +535,14 @@ memcpy(s1->sub, nsub->sub, osubp); \
 			nsub = subs[si]; \
 			goto rec##nn; \
 		} \
+		end##list() \
 		continue; \
 	} \
 	next##nn: \
 	switch(*npc) { \
-	case JMP: \
-		npc += 2 + npc[1]; \
-		goto rec##nn; \
 	case SPLIT: \
-		on##list(nn) \
 		npc += 2; \
 		pcs[si] = npc + npc[-1]; \
-		fastrec(nn, list, listidx) \
-	case RSPLIT: \
-		on##list(nn) \
-		npc += 2; \
-		pcs[si] = npc; \
-		npc += npc[-1]; \
 		fastrec(nn, list, listidx) \
 	case SAVE: \
 		if (nsub->ref > 1) { \
@@ -535,49 +554,31 @@ memcpy(s1->sub, nsub->sub, osubp); \
 		nsub->sub[npc[1]] = _sp; \
 		npc += 2; \
 		goto rec##nn; \
-	case WBEG: \
-		if (((sp != s || sp != _sp) && isword(sp)) \
-				|| !isword(_sp)) \
-			deccheck(nn) \
-		npc++; goto rec##nn; \
-	case WEND: \
-		if (isword(_sp)) \
-			deccheck(nn) \
-		npc++; goto rec##nn; \
-	case BOL: \
-		if (_sp != s) { \
-			if (!si && !listidx) \
-				return 0; \
-			deccheck(nn) \
-		} \
-		npc++; goto rec##nn; \
-	case EOL: \
-		if (*_sp) \
-			deccheck(nn) \
-		npc++; goto rec##nn; \
+	inst##list(nn) \
 	} \
+	deccheck(nn) \
 } \
 
 int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 {
 	int rsubsize = sizeof(rsub)+(sizeof(char*)*nsubp);
 	int i, j, c, suboff = rsubsize, *npc, osubp = nsubp * sizeof(char*);
-	int clistidx = 0, nlistidx = 0, plistidx, nalts;
+	int clistidx = 0, nlistidx = 0, nalts;
+	int nullinst = 0, nmatch = 0;
 	const char *sp = s, *_sp = s;
 	int *insts = prog->insts, *parent;
-	int *pcs[prog->splits], *plist[prog->splits];
+	int *pcs[prog->splits];
 	rsub *subs[prog->splits];
 	char nsubs[rsubsize * 256];
 	rsub *nsub, *s1, *matched = NULL, *freesub = NULL;
 	rthread _clist[prog->len], _nlist[prog->len];
 	rthread *clist = _clist, *nlist = _nlist, *tmp;
-	int nullinst = 0;
 	goto jmp_start;
 	for (;; sp = _sp) {
 		uc_len(i, sp) uc_code(c, sp)
 		_sp = sp+i;
 		nalts = clistidx - nlistidx;
-		nlistidx = 0; plistidx = 0;
+		nlistidx = 0; nmatch = 0;
 		for (i = 0; i < clistidx; i++) {
 			npc = clist[i].pc;
 			nsub = clist[i].sub;
@@ -587,6 +588,8 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 					break;
 			case ANY:
 			addthread:
+				if (nmatch)
+					break;
 				if (i >= clistidx - nalts)
 					parent = clist[i].pc;
 				else {
