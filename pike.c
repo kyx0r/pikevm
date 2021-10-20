@@ -310,14 +310,16 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 				PC += size;
 			}
 			if (code) {
-				mincnt = 0;
+				inf = 0;
 				for (i = 0; i < size; i++)
 					switch (code[term+i]) {
+					case CLASS:
+						i += code[term+i+2] * 2 + 2;
+						icnt++;
+						break;
 					case SPLIT:
 					case RSPLIT:
-						mincnt++;
-					case CLASS:
-						i += code[term+i+2] * 2 + 1;
+						inf++;
 					case JMP:
 					case SAVE:
 					case CHAR:
@@ -325,7 +327,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 					case ANY:
 						icnt++;
 					}
-				prog->splits += mincnt * icnt;
+				prog->splits += inf * icnt;
 				prog->len += (maxcnt-1) * icnt;
 			}
 			break;
