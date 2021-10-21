@@ -92,6 +92,7 @@ typedef struct rsub rsub;
 struct rsub
 {
 	int ref;
+	rsub *freesub;
 	const char *sub[];
 };
 
@@ -450,18 +451,22 @@ int re_comp(rcode *prog, const char *re, int nsubs)
 
 #define newsub(init, copy) \
 if (freesub) \
-	{ s1 = freesub; freesub = (rsub*)s1->sub[0]; copy } \
+	{ s1 = freesub; freesub = s1->freesub; copy } \
 else \
 	{ s1 = (rsub*)&nsubs[suboff+=rsubsize]; init } \
 
 #define decref(csub) \
 if (--csub->ref == 0) { \
-	csub->sub[0] = (char*)freesub; \
+	csub->freesub = freesub; \
 	freesub = csub; \
 } \
 
 #define deccheck(nn) \
 { decref(nsub) goto rec_check##nn; } \
+
+#define endnlist() if (*npc == MATCH) nmatch = 1; \
+
+#define endclist() \
 
 #define onambgnlist(list, listidx) list[listidx].pa = parent; \
 
@@ -487,9 +492,13 @@ memcpy(s1->sub, nsub->sub, osubp / 2);) \
 newsub(/*nop*/, /*nop*/) \
 memcpy(s1->sub, nsub->sub, osubp); \
 
-#define endnlist() if (*npc == MATCH) nmatch = 1; \
+#define onnlist(nn) \
+for (j = 0; j < plistidx; j++) \
+	if (npc == plist[j]) \
+		deccheck(nn) \
+plist[plistidx++] = npc; \
 
-#define endclist() \
+#define onclist(nn) \
 
 #define instclist(nn) \
 case WBEG: \
@@ -510,6 +519,7 @@ case JMP: \
         npc += 2 + npc[1]; \
         goto rec##nn; \
 case RSPLIT: \
+	onnlist(nn) \
         npc += 2; \
         pcs[si] = npc; \
         npc += npc[-1]; \
@@ -543,6 +553,7 @@ case EOL: \
 	next##nn: \
 	switch(*npc) { \
 	case SPLIT: \
+		on##list(nn) \
 		npc += 2; \
 		pcs[si] = npc + npc[-1]; \
 		fastrec(nn, list, listidx) \
@@ -566,10 +577,10 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 	int rsubsize = sizeof(rsub)+(sizeof(char*)*nsubp);
 	int i, j, c, suboff = rsubsize, *npc, osubp = nsubp * sizeof(char*);
 	int clistidx = 0, nlistidx = 0, nalts;
-	int nullinst = 0, nmatch = 0;
+	int nullinst = 0, plistidx = 0, nmatch = 0;
 	const char *sp = s, *_sp = s;
 	int *insts = prog->insts, *parent;
-	int *pcs[prog->splits];
+	int *pcs[prog->splits], *plist[prog->splits];
 	rsub *subs[prog->splits];
 	char nsubs[rsubsize * 256];
 	rsub *nsub, *s1, *matched = NULL, *freesub = NULL;
@@ -580,7 +591,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 		uc_len(i, sp) uc_code(c, sp)
 		_sp = sp+i;
 		nalts = clistidx - nlistidx;
-		nlistidx = 0; nmatch = 0;
+		nlistidx = 0; plistidx = 0; nmatch = 0;
 		for (i = 0; i < clistidx; i++) {
 			npc = clist[i].pc;
 			nsub = clist[i].sub;

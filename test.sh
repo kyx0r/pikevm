@@ -134,6 +134,12 @@ aaaaa(aa)aa(aa(a)a)?aa
 (a(a)(aa)|aaa|a){3,4}
 (a(a)(aa)|aaa|a){6}
 (a(a)(aa)|aaa|a){5,8}
+(a(a)(aa)|(aa)a|(a)){9}
+(a(a)(aa)|(aa)a|(a)){10}
+(a(a)(aa)|(aa)a|(a)){11}
+(a(a)a|(a)|a(aa)|aa){2,5}
+((a)a|a(aa)|(aaaa)|(a*)){3,10}
+((a)a|a(aa)|(aaaa)|(a+)){3,10}
 "
 input="\
 abcdef
@@ -269,6 +275,12 @@ aaaaaaaaaa
 aaaaaaaaaa
 aaaaaaaaaa
 aaaaaaaaaa
+aaaaaaaaaa
+aaaaaaaaaa
+aaaaaaaaaa
+aaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaa
 "
 expect="\
 (0,3)
@@ -404,6 +416,12 @@ expect="\
 (0,10)(9,10)(5,6)(6,8)
 (0,9)(8,9)(1,2)(2,4)
 (0,10)(9,10)(1,2)(2,4)
+(0,9)(8,9)(?,?)(?,?)(?,?)(8,9)
+(0,10)(9,10)(?,?)(?,?)(?,?)(9,10)
+-nomatch-
+(0,13)(12,13)(10,11)(12,13)(?,?)
+(0,17)(17,17)(14,15)(?,?)(?,?)(17,17)
+(0,17)(16,17)(14,15)(?,?)(?,?)(16,17)
 (0,0)
 "
 
