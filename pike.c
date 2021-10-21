@@ -92,6 +92,7 @@ typedef struct rsub rsub;
 struct rsub
 {
 	int ref;
+	rsub *freesub;
 	const char *sub[];
 };
 
@@ -449,13 +450,13 @@ int re_comp(rcode *prog, const char *re, int nsubs)
 
 #define newsub(init, copy) \
 if (freesub) \
-	{ s1 = freesub; freesub = (rsub*)s1->sub[0]; copy } \
+	{ s1 = freesub; freesub = s1->freesub; copy } \
 else \
 	{ s1 = (rsub*)&nsubs[suboff+=rsubsize]; init } \
 
 #define decref(csub) \
 if (--csub->ref == 0) { \
-	csub->sub[0] = (char*)freesub; \
+	csub->freesub = freesub; \
 	freesub = csub; \
 } \
 
@@ -469,6 +470,10 @@ for (j = 0; j < plistidx; j++) \
 plist[plistidx++] = npc; \
 
 #define onclist(nn) \
+
+#define endnlist() if (*npc == MATCH) nmatch = 1; \
+
+#define endclist() \
 
 #define fastrec(nn, list, listidx) \
 nsub->ref++; \
@@ -535,6 +540,7 @@ case EOL: \
 			nsub = subs[i]; \
 			goto rec##nn; \
 		} \
+		end##list() \
 		continue; \
 	} \
 	next##nn: \
@@ -563,7 +569,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 {
 	int rsubsize = sizeof(rsub)+(sizeof(char*)*nsubp);
 	int i, j, c, suboff = rsubsize, *npc, osubp = nsubp * sizeof(char*);
-	int clistidx = 0, nlistidx = 0, plistidx = 0;
+	int clistidx = 0, nlistidx, plistidx, nmatch;
 	const char *sp = s, *_sp = s;
 	int *insts = prog->insts;
 	int *pcs[prog->splits], *plist[prog->splits];
@@ -576,6 +582,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 	for (;; sp = _sp) {
 		uc_len(i, sp) uc_code(c, sp)
 		_sp = sp+i;
+		nlistidx = 0; plistidx = 0; nmatch = 0;
 		for (i = 0; i < clistidx; i++) {
 			npc = clist[i].pc;
 			nsub = clist[i].sub;
@@ -585,6 +592,8 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 					break;
 			case ANY:
 			addthread:
+				if (nmatch)
+					break;
 				addthread(2, nlist, nlistidx)
 			case CLASS:
 				if (!re_classmatch(npc, c))
@@ -608,7 +617,6 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 		clist = nlist;
 		nlist = tmp;
 		clistidx = nlistidx;
-		nlistidx = 0; plistidx = 0;
 		if (!matched) {
 			jmp_start:
 			newsub(memset(s1->sub, 0, osubp);, /*nop*/)
