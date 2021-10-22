@@ -473,7 +473,7 @@ plist[plistidx++] = npc; \
 
 #define onclist(nn) \
 
-#define endnlist() if (*npc == MATCH) nmatch = 1; \
+#define endnlist() if (*npc == MATCH) nmatch = sp; \
 
 #define endclist() \
 
@@ -571,8 +571,8 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 {
 	int rsubsize = sizeof(rsub)+(sizeof(char*)*nsubp);
 	int i, j, c, suboff = rsubsize, *npc, osubp = nsubp * sizeof(char*);
-	int clistidx = 0, nlistidx, plistidx, nmatch;
-	const char *sp = s, *_sp = s;
+	int clistidx = 0, nlistidx, plistidx;
+	const char *sp = s, *_sp = s, *nmatch = NULL;
 	int *insts = prog->insts;
 	int *pcs[prog->splits], *plist[prog->splits];
 	rsub *subs[prog->splits];
@@ -584,7 +584,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 	for (;; sp = _sp) {
 		uc_len(i, sp) uc_code(c, sp)
 		_sp = sp+i;
-		nlistidx = 0; plistidx = 0; nmatch = 0;
+		nlistidx = 0; plistidx = 0;
 		for (i = 0; i < clistidx; i++) {
 			npc = clist[i].pc;
 			nsub = clist[i].sub;
@@ -594,7 +594,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 					break;
 			case ANY:
 			addthread:
-				if (nmatch)
+				if (nmatch == sp)
 					break;
 				addthread(2, nlist, nlistidx)
 			case CLASS:
