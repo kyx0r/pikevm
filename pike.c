@@ -497,11 +497,6 @@ newsub(/*nop*/, /*nop*/) \
 memcpy(s1->sub, nsub->sub, osubp); \
 
 #define instclist(nn) \
-case WBEG: \
-	if (((sp != s || sp != _sp) && isword(sp)) \
-			|| !isword(_sp)) \
-		deccheck(nn) \
-	npc++; goto rec##nn; \
 case BOL: \
 	if (_sp != s) { \
 		if (!i && !clistidx) \
@@ -514,20 +509,6 @@ case BOL: \
 case JMP: \
 	npc += 2 + npc[1]; \
 	goto rec##nn; \
-case RSPLIT: \
-	onnlist(nn) \
-	npc += 2; \
-	pcs[i] = npc; \
-	npc += npc[-1]; \
-	fastrec(nn, nlist, nlistidx) \
-case WEND: \
-	if (isword(_sp)) \
-		deccheck(nn) \
-	npc++; goto rec##nn; \
-case EOL: \
-	if (*_sp) \
-		deccheck(nn) \
-	npc++; goto rec##nn; \
 
 #define addthread(nn, list, listidx) \
 { \
@@ -552,6 +533,12 @@ case EOL: \
 		npc += 2; \
 		pcs[i] = npc + npc[-1]; \
 		fastrec(nn, list, listidx) \
+	case RSPLIT: \
+		on##list(nn) \
+		npc += 2; \
+		pcs[i] = npc; \
+		npc += npc[-1]; \
+		fastrec(nn, list, listidx) \
 	case SAVE: \
 		if (nsub->ref > 1) { \
 			nsub->ref--; \
@@ -562,6 +549,19 @@ case EOL: \
 		nsub->sub[npc[1]] = _sp; \
 		npc += 2; \
 		goto rec##nn; \
+	case WBEG: \
+		if (((sp != s || sp != _sp) && isword(sp)) \
+				|| !isword(_sp)) \
+			deccheck(nn) \
+		npc++; goto rec##nn; \
+	case WEND: \
+		if (isword(_sp)) \
+			deccheck(nn) \
+		npc++; goto rec##nn; \
+	case EOL: \
+		if (*_sp) \
+			deccheck(nn) \
+		npc++; goto rec##nn; \
 	inst##list(nn) \
 	} \
 	deccheck(nn) \
