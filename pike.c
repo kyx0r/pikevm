@@ -330,7 +330,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 					case ANY:
 						icnt++;
 					}
-				prog->splits += inf * icnt;
+				prog->splits += (maxcnt-1) * inf;
 				prog->len += (maxcnt-1) * icnt;
 			}
 			break;
@@ -473,10 +473,6 @@ plist[plistidx++] = npc; \
 
 #define onclist(nn) \
 
-#define endnlist() if (spc == MATCH) nmatch = sp; \
-
-#define endclist() \
-
 #define fastrec(nn, list, listidx) \
 nsub->ref++; \
 spc = *npc; \
@@ -526,7 +522,6 @@ if (spc < WBEG) { \
 		nsub = subs[si]; \
 		goto rec##nn; \
 	} \
-	end##list() \
 	continue; \
 } \
 next##nn: \
@@ -572,14 +567,15 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 	int rsubsize = sizeof(rsub)+(sizeof(char*)*nsubp);
 	int si, i, j, c, suboff = rsubsize, *npc, osubp = nsubp * sizeof(char*);
 	int clistidx = 0, nlistidx, plistidx, spc;
-	const char *sp = s, *_sp = s, *nmatch = NULL;
+	const char *sp = s, *_sp = s;
 	int *insts = prog->insts;
 	int *pcs[prog->splits], *plist[prog->splits];
 	rsub *subs[prog->splits];
 	char nsubs[500000];
 	rsub *nsub, *s1, *matched = NULL, *freesub = NULL;
-	rthread _clist[prog->len], _nlist[prog->len];
-	rthread *clist = _clist, *nlist = _nlist, *tmp;
+	rthread _clist[prog->len+1], _nlist[prog->len+1];
+	_clist[0].pc = insts, _nlist[0].pc = insts;
+	rthread *clist = _clist+1, *nlist = _nlist+1, *tmp;
 	goto jmp_start;
 	for (;; sp = _sp) {
 		uc_len(i, sp) uc_code(c, sp)
@@ -594,7 +590,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 					break;
 			case ANY:
 			addthread:
-				if (nmatch == sp)
+				if (*nlist[nlistidx-1].pc == MATCH)
 					break;
 				addthread(2, nlist, nlistidx)
 			case CLASS:
