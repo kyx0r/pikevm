@@ -467,6 +467,10 @@ expect="\
 (0,0)
 "
 
+if [ ! -f ./a.out ]; then
+	gcc pike.c -pedantic -Wall -Wfatal-errors -std=c99 $CFLAGS
+fi
+
 c=1
 printf '%s\n' "$regex" | while read re; do
 	inp=$(printf '%s\n' "$input" | awk -v c=$c 'BEGIN{ RS = "" ; FS = "\n" }{print $c}')
