@@ -468,20 +468,20 @@ expect="\
 "
 
 c=1
-echo "$regex" | tr '\n' | while read re; do
-	inp=$(echo "$input" | awk -v c=$c 'BEGIN{ RS = "" ; FS = "\n" }{print $c}')
-	exp=$(echo "$expect" | awk -v c=$c 'BEGIN{ RS = "" ; FS = "\n" }{print $c}')
+printf '%s\n' "$regex" | while read re; do
+	inp=$(printf '%s\n' "$input" | awk -v c=$c 'BEGIN{ RS = "" ; FS = "\n" }{print $c}')
+	exp=$(printf '%s\n' "$expect" | awk -v c=$c 'BEGIN{ RS = "" ; FS = "\n" }{print $c}')
 	var=$(./a.out "$re" "$inp")
 	if [ "$1" ]; then
-	echo "$var"
+	printf '%s\n' "$var"
 	fi
-	var1=$(echo "$var" | tail -1)
+	var1=$(printf '%s\n' "$var" | tail -1)
 	if [ ! "$exp" = "$var1" ]; then
-		echo "fail test$c regex:$re input:$inp expect:$exp output:$var1"
+		printf '%s\' "fail test$c regex:$re input:$inp expect:$exp output:$var1"
 		exit 1
 	fi
-	time=$(echo "$var" | tail -2 | head -n1)
-	echo "pass test$c regex:$re input:$inp expect:$exp output:$var1 $time"
+	time=$(printf '%s\n' "$var" | tail -2 | head -n1)
+	printf '%s\n' "pass test$c regex:$re input:$inp expect:$exp output:$var1 $time"
 	c=$((c+1))
 done
 
