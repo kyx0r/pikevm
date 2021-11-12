@@ -609,7 +609,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 			decref(nsub)
 		}
 		break_for:
-		if (!c)
+		if (sp == _sp)
 			break;
 		tmp = clist;
 		clist = nlist;

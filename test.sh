@@ -481,7 +481,7 @@ printf '%s\n' "$regex" | while read re; do
 	fi
 	var1=$(printf '%s\n' "$var" | tail -1)
 	if [ ! "$exp" = "$var1" ]; then
-		printf '%s\' "fail test$c regex:$re input:$inp expect:$exp output:$var1"
+		printf '%s\n' "fail test$c regex:$re input:$inp expect:$exp output:$var1"
 		exit 1
 	fi
 	time=$(printf '%s\n' "$var" | tail -2 | head -n1)
