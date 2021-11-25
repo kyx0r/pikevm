@@ -79,6 +79,7 @@ enum
 	RSPLIT,
 	// Other (special) instructions
 	SAVE,
+	MATCHCONT,
 };
 
 // Return codes for re_sizecode() and re_comp()
@@ -418,7 +419,7 @@ syntax_error:
 int re_sizecode(const char *re, int *nsub)
 {
 	rcode dummyprog;
-	dummyprog.unilen = 3;
+	dummyprog.unilen = 4;
 	dummyprog.sub = 0;
 
 	int res = _compilecode(&re, &dummyprog, /*sizecode*/1);
@@ -445,6 +446,7 @@ int re_comp(rcode *prog, const char *re, int nsubs)
 	prog->insts[prog->unilen++] = SAVE;
 	prog->insts[prog->unilen++] = prog->sub + 1;
 	prog->insts[prog->unilen++] = MATCH;
+	prog->insts[prog->unilen] = MATCHCONT;
 	prog->len += 2;
 
 	return RE_SUCCESS;
@@ -562,6 +564,12 @@ if (spc == SPLIT) { \
 } inst##list(nn) \
 deccheck(nn) \
 
+#define swaplist() \
+tmp = clist; \
+clist = nlist; \
+nlist = tmp; \
+clistidx = nlistidx; \
+
 int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 {
 	int rsubsize = sizeof(rsub)+(sizeof(char*)*nsubp);
@@ -604,33 +612,30 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 					suboff = 0;
 				}
 				matched = nsub;
-				goto break_for;
+			case MATCHCONT:
+				if (sp == _sp || !nlistidx) {
+					for (i = 0, j = i; i < nsubp; i+=2, j++) {
+						subp[i] = matched->sub[j];
+						subp[i+1] = matched->sub[nsubp / 2 + j];
+					}
+					return 1;
+				}
+				nlist[nlistidx++].pc = &insts[prog->unilen];
+				swaplist()
+				goto _continue;
 			}
 			decref(nsub)
 		}
-		break_for:
 		if (sp == _sp)
 			break;
-		tmp = clist;
-		clist = nlist;
-		nlist = tmp;
-		clistidx = nlistidx;
-		if (!matched) {
-			jmp_start:
-			newsub(memset(s1->sub, 0, osubp);, /*nop*/)
-			s1->ref = 1;
-			s1->sub[0] = _sp;
-			nsub = s1; npc = insts;
-			addthread(1, clist, clistidx)
-		} else if (!clistidx)
-			break;
-	}
-	if (matched) {
-		for (i = 0, j = i; i < nsubp; i+=2, j++) {
-			subp[i] = matched->sub[j];
-			subp[i+1] = matched->sub[nsubp / 2 + j];
-		}
-		return 1;
+		swaplist()
+		jmp_start:
+		newsub(memset(s1->sub, 0, osubp);, /*nop*/)
+		s1->ref = 1;
+		s1->sub[0] = _sp;
+		nsub = s1; npc = insts;
+		addthread(1, clist, clistidx)
+		_continue:;
 	}
 	return 0;
 }
