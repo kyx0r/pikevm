@@ -609,7 +609,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 					}
 					matched = nsub;
 				}
-				if (sp == _sp || !nlistidx) {
+				if (sp == _sp || nlistidx == 1) {
 					for (i = 0, j = i; i < nsubp; i+=2, j++) {
 						subp[i] = matched->sub[j];
 						subp[i+1] = matched->sub[nsubp / 2 + j];
