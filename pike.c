@@ -446,7 +446,7 @@ sparse[spc] = sparsesz++; \
 #define fastrec(nn, list, listidx) \
 nsub->ref++; \
 spc = *npc; \
-if (spc < WBEG) { \
+if ((unsigned int)spc < WBEG) { \
 	list[listidx].sub = nsub; \
 	list[listidx++].pc = npc; \
 	npc = pcs[si]; \
