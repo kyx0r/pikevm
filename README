@@ -164,16 +164,16 @@ near the overflow, but as you may guess that does not come
 for free.
 
 Currently I removed all dynamic global state from the instructions
-fixing any overlow issue at the cost of slight overhead of needing
-to look though the nlist states, to prevent their readdition. This
-solution is still fast because it affects only nlist + split run on
-so most other uses of regex don't suffer big performace penalty.
-This does not solve the ambiguity problem with multiple
-continuous states though. Finding a fast O(1) solution for continuous
-ambiguity is the last thing preventing me to call this regex engine
-PERFECT and limitation free. While yet, this is to be invented it
-takes a big deal of genius and creativity to make new algorithms
-or find improvements in what we already know.
+fixing any overlow issue utilizing a sparse set datastructure trick
+which abuses the uninitialized varibles. This allows the redundant
+states to be excluded in O(1) operation. That said, don't run
+valgrind on pikevm as it will go crazy, or find a way to surpress
+errors from pikevm.
+
+Further reading
+===============
+https://research.swtch.com/sparse
+https://swtch.com/~rsc/regexp/regexp1.html
 
 Author and License
 ==================

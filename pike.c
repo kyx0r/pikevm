@@ -132,12 +132,12 @@ void re_dumpcode(rcode *prog)
 			pc = prog->unilen;
 			break;
 		case SPLIT:
-			printf("split %d (%d)\n", pc + code[pc] + 1, code[pc]);
-			pc++;
+			printf("split %d (%d) #%d\n", pc + code[pc] + 2, code[pc], code[pc+1]);
+			pc+=2;
 			break;
 		case RSPLIT:
-			printf("rsplit %d (%d)\n", pc + code[pc] + 1, code[pc]);
-			pc++;
+			printf("rsplit %d (%d) #%d\n", pc + code[pc] + 2, code[pc], code[pc+1]);
+			pc+=2;
 			break;
 		case JMP:
 			printf("jmp %d (%d)\n", pc + code[pc] + 1, code[pc]);
@@ -180,7 +180,8 @@ void re_dumpcode(rcode *prog)
 			break;
 		}
 	}
-	printf("Unilen: %d, insts: %d, counted insts: %d\n", prog->unilen, prog->len, i);
+	printf("Unilen: %d, insts: %d, splits: %d, counted insts: %d\n",
+		prog->unilen, prog->len, prog->splits, i);
 }
 
 /* next todo: crack and factor out this recursion,
@@ -204,7 +205,6 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 				if (re - *re_loc > 2 && re[-2] == '\\')
 					break;
 				EMIT(PC++, *re == '<' ? WBEG : WEND);
-				prog->len++;
 				term = PC;
 				break;
 			}
@@ -212,12 +212,10 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			term = PC;
 			EMIT(PC++, CHAR);
 			uc_code(c, re) EMIT(PC++, c);
-			prog->len++;
 			break;
 		case '.':
 			term = PC;
 			EMIT(PC++, ANY);
-			prog->len++;
 			break;
 		case '[':;
 			int cnt;
@@ -230,7 +228,6 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			} else
 				EMIT(PC++, 1);
 			PC++; // Skip "# of pairs" byte
-			prog->len++;
 			for (cnt = 0; *re != ']'; cnt++) {
 				if (*re == '\\') re++;
 				if (!*re) goto syntax_error;
@@ -262,7 +259,6 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 				sub = ++prog->sub;
 				EMIT(PC++, SAVE);
 				EMIT(PC++, sub);
-				prog->len++;
 			}
 			int res = _compilecode(&re, prog, sizecode);
 			*re_loc = re;
@@ -271,83 +267,53 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			if (capture) {
 				EMIT(PC++, SAVE);
 				EMIT(PC++, sub + prog->presub + 1);
-				prog->len++;
 			}
 			break;
 		case '{':;
-			int maxcnt = 0, mincnt = 0,
-			i = 0, icnt = 0, inf = 0, size;
+			int maxcnt = 0, mincnt = 0, i = 0, size = PC - term;
 			re++;
 			while (isdigit((unsigned char) *re))
 				mincnt = mincnt * 10 + *re++ - '0';
 			if (*re == ',') {
 				re++;
-				if (*re == '}')
-					inf = 1;
+				if (*re == '}') {
+					EMIT(PC, RSPLIT);
+					EMIT(PC+1, REL(PC, PC - size - 1));
+					PC += 3;
+					maxcnt = mincnt;
+				}
 				while (isdigit((unsigned char) *re))
 					maxcnt = maxcnt * 10 + *re++ - '0';
 			} else
 				maxcnt = mincnt;
-			for (size = PC - term; i < mincnt-1; i++) {
+			for (; i < mincnt-1; i++) {
 				if (code)
 					memcpy(&code[PC], &code[term], size*sizeof(int));
 				PC += size;
-			}
-			if (inf) {
-				EMIT(PC, RSPLIT);
-				EMIT(PC+1, REL(PC, PC - size));
-				PC += 2;
-				prog->len++;
-				prog->splits++;
-				maxcnt = mincnt;
 			}
 			for (i = maxcnt-mincnt; i > 0; i--) {
 				EMIT(PC++, SPLIT);
-				EMIT(PC++, REL(PC, PC+((size+2)*i)));
-				prog->splits++;
-				prog->len++;
+				EMIT(PC++, REL(PC-1, PC+((size+3)*i)));
+				PC++;
 				if (code)
 					memcpy(&code[PC], &code[term], size*sizeof(int));
 				PC += size;
-			}
-			if (code) {
-				inf = 0;
-				for (i = 0; i < size; i++)
-					switch (code[term+i]) {
-					case CLASS:
-						i += code[term+i+2] * 2 + 2;
-						icnt++;
-						break;
-					case SPLIT:
-					case RSPLIT:
-						inf++;
-					case JMP:
-					case SAVE:
-					case CHAR:
-						i++;
-					case ANY:
-						icnt++;
-					}
-				prog->splits += (maxcnt-1) * inf;
-				prog->len += (maxcnt-1) * icnt;
 			}
 			break;
 		case '?':
 			if (PC == term) goto syntax_error;
-			INSERT_CODE(term, 2, PC);
+			INSERT_CODE(term, 3, PC);
 			if (re[1] == '?') {
 				EMIT(term, RSPLIT);
 				re++;
 			} else
 				EMIT(term, SPLIT);
-			EMIT(term + 1, REL(term, PC));
-			prog->len++;
-			prog->splits++;
+			EMIT(term + 1, REL(term, PC - 1));
 			term = PC;
 			break;
 		case '*':
 			if (PC == term) goto syntax_error;
-			INSERT_CODE(term, 2, PC);
+			INSERT_CODE(term, 3, PC);
 			EMIT(PC, JMP);
 			EMIT(PC + 1, REL(PC, term));
 			PC += 2;
@@ -356,9 +322,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 				re++;
 			} else
 				EMIT(term, SPLIT);
-			EMIT(term + 1, REL(term, PC));
-			prog->splits++;
-			prog->len += 2;
+			EMIT(term + 1, REL(term, PC - 1));
 			term = PC;
 			break;
 		case '+':
@@ -368,32 +332,26 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 				re++;
 			} else
 				EMIT(PC, RSPLIT);
-			EMIT(PC + 1, REL(PC, term));
-			PC += 2;
-			prog->splits++;
-			prog->len++;
+			EMIT(PC + 1, REL(PC - 1, term));
+			PC += 3;
 			term = PC;
 			break;
 		case '|':
 			if (alt_label)
 				alt_stack[altc++] = alt_label;
-			INSERT_CODE(start, 2, PC);
+			INSERT_CODE(start, 3, PC);
 			EMIT(PC++, JMP);
 			alt_label = PC++;
 			EMIT(start, SPLIT);
-			EMIT(start + 1, REL(start, PC));
-			prog->splits++;
-			prog->len += 2;
+			EMIT(start + 1, REL(start, PC-1));
 			term = PC;
 			break;
 		case '^':
 			EMIT(PC++, BOL);
-			prog->len++;
 			term = PC;
 			break;
 		case '$':
 			EMIT(PC++, EOL);
-			prog->len++;
 			term = PC;
 			break;
 		}
@@ -402,7 +360,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 	if (code && alt_label) {
 		EMIT(alt_label, REL(alt_label, PC) + 1);
 		for (int alts = altc; altc; altc--) {
-			int at = alt_stack[alts-altc]+altc*2;
+			int at = alt_stack[alts-altc]+altc*3;
 			EMIT(at, REL(at, PC) + 1);
 		}
 	}
@@ -439,12 +397,29 @@ int re_comp(rcode *prog, const char *re, int nsubs)
 	if (res < 0) return res;
 	// If unparsed chars left
 	if (*re) return RE_SYNTAX_ERROR;
-
+	int icnt = 0, scnt = 0;
+	for (int i = 0; i < prog->unilen; i++)
+		switch (prog->insts[i]) {
+		case CLASS:
+			i += prog->insts[i+2] * 2 + 2;
+			icnt++;
+			break;
+		case SPLIT:
+		case RSPLIT:
+			prog->insts[i + 2] = scnt++;
+			i++;
+		case JMP:
+		case SAVE:
+		case CHAR:
+			i++;
+		case ANY:
+			icnt++;
+		}
 	prog->insts[prog->unilen++] = SAVE;
 	prog->insts[prog->unilen++] = prog->sub + 1;
 	prog->insts[prog->unilen++] = MATCH;
-	prog->len += 2;
-
+	prog->splits = scnt;
+	prog->len = icnt+2;
 	return RE_SUCCESS;
 }
 
@@ -465,10 +440,11 @@ if (--csub->ref == 0) { \
 
 #define onclist(nn)
 #define onnlist(nn) \
-for (j = 0; j < plistidx; j++) \
-	if (npc == plist[j]) \
+if (sparse[npc[2]] < sparsesz) \
+	if (sdense[sparse[npc[2]]] == npc[2]) \
 		deccheck(nn) \
-plist[plistidx++] = npc; \
+sdense[sparsesz] = npc[2]; \
+sparse[npc[2]] = sparsesz++; \
 
 #define fastrec(nn, list, listidx) \
 nsub->ref++; \
@@ -524,8 +500,8 @@ if (spc < WBEG) { \
 next##nn: \
 if (spc == SPLIT) { \
 	on##list(nn) \
-	npc += 2; \
-	pcs[si] = npc + npc[-1]; \
+	npc += 3; \
+	pcs[si] = npc + npc[-2]; \
 	fastrec(nn, list, listidx) \
 } else if (spc == SAVE) { \
 	if (nsub->ref > 1) { \
@@ -544,9 +520,9 @@ if (spc == SPLIT) { \
 	npc++; goto rec##nn; \
 } else if (spc == RSPLIT) { \
 	on##list(nn) \
-	npc += 2; \
+	npc += 3; \
 	pcs[si] = npc; \
-	npc += npc[-1]; \
+	npc += npc[-2]; \
 	fastrec(nn, list, listidx) \
 } else if (spc == WEND) { \
 	if (isword(_sp)) \
@@ -571,12 +547,13 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 {
 	int rsubsize = sizeof(rsub)+(sizeof(char*)*nsubp);
 	int si, i, j, c, suboff = rsubsize, *npc, osubp = nsubp * sizeof(char*);
-	int clistidx = 0, nlistidx, plistidx, spc, mcont = MATCH;
+	int clistidx = 0, nlistidx, sparsesz, spc, mcont = MATCH;
 	const char *sp = s, *_sp = s;
 	int *insts = prog->insts;
-	int *pcs[prog->splits], *plist[prog->splits];
+	int *pcs[prog->splits];
+	unsigned int sdense[prog->splits], sparse[prog->splits];
 	rsub *subs[prog->splits];
-	char nsubs[500000];
+	char nsubs[rsubsize * (prog->len-prog->splits+3)];
 	rsub *nsub, *s1, *matched = NULL, *freesub = NULL;
 	rthread _clist[prog->len+1], _nlist[prog->len+1];
 	_clist[0].pc = insts, _nlist[0].pc = insts;
@@ -585,7 +562,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 	for (;; sp = _sp) {
 		uc_len(i, sp) uc_code(c, sp)
 		_sp = sp+i;
-		nlistidx = 0; plistidx = 0;
+		nlistidx = 0; sparsesz = 0;
 		for (i = 0; i < clistidx; i++) {
 			npc = clist[i].pc;
 			nsub = clist[i].sub;
