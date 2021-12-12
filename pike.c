@@ -400,11 +400,13 @@ int re_comp(rcode *prog, const char *re, int nsubs)
 			icnt++;
 			break;
 		case SPLIT:
-			prog->insts[i++] = scnt++;
+			prog->insts[i++] = scnt;
+			scnt += 2;
 			icnt++;
 			break;
 		case RSPLIT:
-			prog->insts[i] = -scnt++;
+			prog->insts[i] = -scnt;
+			scnt += 2;
 		case JMP:
 		case SAVE:
 		case CHAR:
@@ -415,7 +417,7 @@ int re_comp(rcode *prog, const char *re, int nsubs)
 	prog->insts[prog->unilen++] = SAVE;
 	prog->insts[prog->unilen++] = prog->sub + 1;
 	prog->insts[prog->unilen++] = MATCH;
-	prog->splits = scnt;
+	prog->splits = (scnt - SPLIT) / 2 + SPLIT;
 	prog->len = icnt+2;
 	return RE_SUCCESS;
 }
@@ -437,11 +439,12 @@ if (--csub->ref == 0) { \
 
 #define onclist(nn)
 #define onnlist(nn) \
-if (sparse[spc] < sparsesz) \
-	if (sdense[sparse[spc]] == spc) \
+if (sdense[spc+1] < sparsesz) \
+	if (sdense[sdense[spc+1]] == (unsigned int)spc) \
 		deccheck(nn) \
+sdense[spc+1] = sparsesz; \
 sdense[sparsesz] = spc; \
-sparse[spc] = sparsesz++; \
+sparsesz += 2; \
 
 #define fastrec(nn, list, listidx) \
 nsub->ref++; \
@@ -545,11 +548,11 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 {
 	int rsubsize = sizeof(rsub)+(sizeof(char*)*nsubp);
 	int si, i, j, c, suboff = rsubsize, *npc, osubp = nsubp * sizeof(char*);
-	int clistidx = 0, nlistidx, sparsesz, spc, mcont = MATCH;
+	int clistidx = 0, nlistidx, spc, mcont = MATCH;
 	const char *sp = s, *_sp = s;
 	int *insts = prog->insts;
 	int *pcs[prog->splits];
-	unsigned int sdense[prog->splits], sparse[prog->splits];
+	unsigned int sdense[prog->splits * 2], sparsesz;
 	rsub *subs[prog->splits];
 	char nsubs[rsubsize * (prog->len-prog->splits+14)];
 	rsub *nsub, *s1, *matched = NULL, *freesub = NULL;
@@ -560,7 +563,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 	for (;; sp = _sp) {
 		uc_len(i, sp) uc_code(c, sp)
 		_sp = sp+i;
-		nlistidx = 0; sparsesz = 0;
+		nlistidx = 0; sparsesz = SPLIT;
 		for (i = 0; i < clistidx; i++) {
 			npc = clist[i].pc;
 			nsub = clist[i].sub;
