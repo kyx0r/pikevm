@@ -392,7 +392,7 @@ int re_comp(rcode *prog, const char *re, int nsubs)
 	if (res < 0) return res;
 	// If unparsed chars left
 	if (*re) return RE_SYNTAX_ERROR;
-	int icnt = 0, scnt = SPLIT;
+	int icnt = 0, scnt = SPLIT + 1;
 	for (int i = 0; i < prog->unilen; i++)
 		switch (prog->insts[i]) {
 		case CLASS:
@@ -439,10 +439,10 @@ if (--csub->ref == 0) { \
 
 #define onclist(nn)
 #define onnlist(nn) \
-if (sdense[spc+1] < sparsesz) \
-	if (sdense[sdense[spc+1]] == (unsigned int)spc) \
+if (sdense[spc] < sparsesz) \
+	if (sdense[sdense[spc]] == (unsigned int)spc) \
 		deccheck(nn) \
-sdense[spc+1] = sparsesz; \
+sdense[spc] = sparsesz; \
 sdense[sparsesz] = spc; \
 sparsesz += 2; \
 
@@ -484,7 +484,7 @@ else if (spc == JMP) { \
 
 #define clistmatch()
 #define nlistmatch() \
-if (*npc == MATCH) \
+if (spc == MATCH) \
 	for (i++; i < clistidx; i++) { \
 		npc = clist[i].pc; \
 		nsub = clist[i].sub; \
