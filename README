@@ -23,7 +23,7 @@ Features
 
 * UnLike re1.5, here is only pikevm, one file easy to use.
 * Unlike re1.5, regexes is compiled to type sized code rather than bytecode,
-eliviating the problem of byte overflow in splits/jmps on large regexes. 
+eliviating the problem of byte overflow in splits/jmps on large regexes.
 Currently the type used is int, and every atom in compiled code is aligned
 to that.
 * Matcher does not take size of string as param, it checks for '\0' instead,
@@ -54,121 +54,103 @@ NOTES
 The problem described in this paper has been fixed. Ambiguous matching is correct.
 HISTORY:
 https://re2c.org/2019_borsotti_trofimovich_efficient_posix_submatch_extraction_on_nfa.pdf
-"Cox, 2009 (incorrect). Cox came up with the idea of backward POSIX matching, 
-which is based on the observation that reversing the longest-match rule 
-simplifies the handling of iteration subexpressions: instead of maximizing 
-submatch from the first to the last iteration, one needs to maximize the 
-iterations in reverse order. This means that the disambiguation is always 
-based on the most recent iteration, removing the need to remember all previous 
-iterations (except for the backwards-first, i.e.  the last one, which contains 
-submatch result). The algorithm tracks two pairs of offsets per each submatch 
-group: the active pair (used for disambiguation) and the result pair. It gives 
-incorrect results under two conditions: (1) ambiguous matches have equal 
-offsets on some iteration, and (2) disambiguation happens too late, when 
-the active offsets have already been updated and the difference between 
-ambiguous matches is erased. We found that such situations may occur for two 
-reasons. First, the ε-closure algorithm may compare ambiguous paths after 
+"Cox, 2009 (incorrect). Cox came up with the idea of backward POSIX matching,
+which is based on the observation that reversing the longest-match rule
+simplifies the handling of iteration subexpressions: instead of maximizing
+submatch from the first to the last iteration, one needs to maximize the
+iterations in reverse order. This means that the disambiguation is always
+based on the most recent iteration, removing the need to remember all previous
+iterations (except for the backwards-first, i.e.  the last one, which contains
+submatch result). The algorithm tracks two pairs of offsets per each submatch
+group: the active pair (used for disambiguation) and the result pair. It gives
+incorrect results under two conditions: (1) ambiguous matches have equal
+offsets on some iteration, and (2) disambiguation happens too late, when
+the active offsets have already been updated and the difference between
+ambiguous matches is erased. We found that such situations may occur for two
+reasons. First, the ε-closure algorithm may compare ambiguous paths after
 their join point, when both paths have a common suffix with tagged
-transitions. This is the case with the Cox prototype implementation; for 
-example, it gives incorrect results for (aa|a)* and string aaaaa. Most of such 
-failures can be repaired by exploring states in topological order, but a 
-topological order does not exist in the presence of ε-loops. The second reason 
-is bounded repetition: ambiguous paths may not have an intermediate join point 
-at all. For example, in the case of (aaaa|aaa|a){3,4} and string aaaaaaaaaa we 
-have matches (aaaa)(aaaa)(a)(a) and (aaaa)(aaa)(aaa) with a different number 
-of iterations. Assuming that the bounded repetition is unrolled by chaining 
-three sub-automata for (aaaa|aaa|a) and an optional fourth one, by the time 
-ambiguous paths meet both have active offsets (0,4). Despite the flaw, Cox 
-algorithm is interesting: if somehow the delayed comparison problem was fixed, 
+transitions. This is the case with the Cox prototype implementation; for
+example, it gives incorrect results for (aa|a)* and string aaaaa. Most of such
+failures can be repaired by exploring states in topological order, but a
+topological order does not exist in the presence of ε-loops. The second reason
+is bounded repetition: ambiguous paths may not have an intermediate join point
+at all. For example, in the case of (aaaa|aaa|a){3,4} and string aaaaaaaaaa we
+have matches (aaaa)(aaaa)(a)(a) and (aaaa)(aaa)(aaa) with a different number
+of iterations. Assuming that the bounded repetition is unrolled by chaining
+three sub-automata for (aaaa|aaa|a) and an optional fourth one, by the time
+ambiguous paths meet both have active offsets (0,4). Despite the flaw, Cox
+algorithm is interesting: if somehow the delayed comparison problem was fixed,
 it would work.  The algorithm requires O(mt) memory and O(nm^2t) time
 (assuming a worst-case optimal closure algorithm), where n is the
-length of input, m it the size of RE and t is the number of submatch groups 
+length of input, m it the size of RE and t is the number of submatch groups
 and subexpressions that contain them."
 
 Research has shown that it is possible to disambiguate NFA in polynomial time
-but it brings serious performance issues on non ambiguous inputs.
-See the branch "disambiguate_paths" on this repo shows what is being
-done to solve it and the potential performance costs. In short it
-requires tracking the parent of every state added on nlist from clist.
-If the state from nlist matches the consumer, the alternative clist
-state related to that nlist state gets discarded and the nsub ref
-can be decremented (freed). The reason why this problem does not
-exist for non ambiguous regexes is because the alternative clist
-state will never match due to the next state having a different
-consumer. There is no need for any extra handling it gets freed normally.
-I decided to not apply this solution here because I think
-most use cases for regex are not ambiguious like say regex:
-"a{10000}". If you try matching 10000 'a' characters in a row
-like that you will have a problem where the stack usage will
-jump up to 10000*(subsize) but it will never exceed the size
-of regex though, but the number of NFA states will also increase
-by the same amount, so at the charater 9999 you will find
-9999 redundant nlist states, that will degrade performance
-linearly, however it will be very slow compared to uplimited
-regex like a+. The cost of this solution is somewhere around
-2% general performance decrease (broadly), but a magnitude of 
-complexity decrease for ambiguous cases, for example
-matching 64 characters went down from 30 to 9 microseconds.
-Another solution to this problem can be to determine the
-ambiguous paths at compile time and flag the inner
-states as ambiguous ahead of time, still this can't avoid
-having a loop though the alt states as their positioning
-in clist can't be precomputed due to the dynamic changes.
-
+but it brings serious performance issues on non ambiguous inputs.  See the
+branch "disambiguate_paths" on this repo shows what is being done to solve it
+and the potential performance costs. In short it requires tracking the parent
+of every state added on nlist from clist.  If the state from nlist matches
+the consumer, the alternative clist state related to that nlist state gets
+discarded and the nsub ref can be decremented (freed). The reason why this
+problem does not exist for non ambiguous regexes is because the alternative
+clist state will never match due to the next state having a different consumer
+. There is no need for any extra handling it gets freed normally.  I decided
+to not apply this solution here because I think most use cases for regex are
+not ambiguious like say regex: "a{10000}". If you try matching 10000 'a'
+characters in a row like that you will have a problem where the stack usage
+will jump up to 10000*(subsize) but it will never exceed the size of regex
+though, but the number of NFA states will also increase by the same amount,
+so at the charater 9999 you will find 9999 redundant nlist states, that will
+degrade performance linearly, however it will be very slow compared to
+uplimited regex like a+. The cost of this solution is somewhere around 2%
+general performance decrease (broadly), but a magnitude of complexity
+decrease for ambiguous cases, for example matching 64 characters went down
+from 30 to 9 microseconds.  Another solution to this problem can be to
+determine the ambiguous paths at compile time and flag the inner states as
+ambiguous ahead of time, still this can't avoid having a loop though the alt
+states as their positioning in clist can't be precomputed due to the dynamic
+changes.
 (Comment about O(mt) memory complexity)
-This worst case scenario can only happen on ambiguous input, that is why nsubs
-size is set to half a MB just in case, this can match 5000000 
-ambiguous consumers (char, class, any) assuming t is 1. In practice there
-is almost never a situation where someone wants to search using regex this
-large. Use of alloca() instead of VLA, could remove this limit, I just wish
-it was standardized. If you ever wondered about a situation where alloca
-is a must, this is the algorithm.
-Most of the time memory usage is very low and the space
-complexity for non ambigious regex is O(nt) where n is
-the number of currently considering alternate paths
-in the regex and t is the number of submatch groups.
+This worst case scenario can only happen on ambiguous input. Ambiguous
+consumers (char, class, any) assuming t is 1. In practice there is almost
+never a situation where someone wants to search using regex this large. Most
+of the time memory usage is very low and the space complexity for non
+ambigious regex is O(nt) where n is the number of currently considering
+alternate paths in the regex and t is the number of submatch groups.
 
-This pikevm features an improved submatch extraction
-algorithm based on Russ Cox's original design. 
-I - Kyryl Melekhin have found a way to optimize the tracking
-properly of 1st number in the submatch pair. Based on simple
-observation of how the NFA is constructed I noticed that
-there is no way for addthread1() to ever reach inner SAVE
-instructions in the regex, so that leaves tracking 2nd pairs by
-addthread1() irrelevant to the final results (except the need to 
-initialize the sub after allocation). This improved the overall 
-performance by 25% which is massive considering that at the 
-time there was nothing else left to can be done to make it faster.
+This pikevm implementation features an improved submatch extraction algorithm
+based on Russ Cox's original design.  I - Kyryl Melekhin have found a way to
+optimize the tracking properly of 1st number in the submatch pair. Based on
+simple observation of how the NFA is constructed I noticed that there is no
+way for addthread1() to ever reach inner SAVE instructions in the regex, so
+that leaves tracking 2nd pairs by addthread1() irrelevant to the final
+results (except the need to initialize the sub after allocation). This
+improved the overall performance by 25% which is massive considering that at
+the time there was nothing else left to can be done to make it faster.
 
 What are on##list macros?
-Redundant state inside nlist can happen in couple of
-ways, and has to do with the (closure) a* (star) operations and
-also +. Due to the automata machine design split happens
-to be above the next consumed instruction and if that
-state gets added onto the list we may segfault or give
-wrong submatch result. Rsplit does not have this problem
-because it is generated below the consumer instruction, but
-it can still add redundant states. Overall this is extremely
-difficult to understand or explain, but this is just something
-we have to check for. We checked for this using extra int inside
-the split instructions, so this left some global state inside the
-machine insts. Most of the time we just added to the next
-gen number and kept incrementing it forever. This leaves a small
-chance of overflowing the int and getting a run on a false state
-left from previous use of the regex. Though if overflow never
-happens there is no chance of getting a false state. Overflows
-like this pose a high security threat, if the hacker knows
-how many cycles he needs to overflow the gen variable and get
-inconsistent result. It is possible to reset the marks if we
-near the overflow, but as you may guess that does not come
-for free.
+Redundant state inside nlist can happen in couple of ways, and has to do with 
+the (closure) a* (star) operations and also +. Due to the automata machine 
+design split happens to be above the next consumed instruction and if that 
+state gets added onto the list we may segfault or give wrong submatch result. 
+Rsplit does not have this problem because it is generated below the consumer 
+instruction, but it can still add redundant states. Overall this is extremely 
+difficult to understand or explain, but this is just something we have to 
+check for. We checked for this using extra int inside the split instructions, 
+so this left some global state inside the machine insts. Most of the time we 
+just added to the next gen number and kept incrementing it forever. This 
+leaves a small chance of overflowing the int and getting a run on a false 
+state left from previous use of the regex. Though if overflow never happens 
+there is no chance of getting a false state. Overflows like this pose a high 
+security threat, if the hacker knows how many cycles he needs to overflow the 
+gen variable and get inconsistent result. It is possible to reset the marks 
+if we near the overflow, but as you may guess that does not come for free.
 
-Currently I removed all dynamic global state from the instructions
-fixing any overlow issue utilizing a sparse set datastructure trick
-which abuses the uninitialized varibles. This allows the redundant
-states to be excluded in O(1) operation. That said, don't run
-valgrind on pikevm as it will go crazy, or find a way to surpress
-errors from pikevm.
+Currently I removed all dynamic global state from the instructions fixing any 
+overlow issue utilizing a sparse set datastructure trick which abuses the 
+uninitialized varibles. This allows the redundant states to be excluded in
+O(1) operation. That said, don't run valgrind on pikevm as it will go crazy, or 
+find a way to surpress errors from pikevm.
 
 Further reading
 ===============

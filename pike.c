@@ -1,5 +1,8 @@
-// Copyright 2007-2009 Russ Cox.  All Rights Reserved.
-// Use of this source code is governed by a BSD-style
+/* 
+Copyright 2007-2009 Russ Cox.  All Rights Reserved.
+Copyright 2020-2021 Kyryl Melekhin.  All Rights Reserved.
+Use of this source code is governed by a BSD-style
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -51,35 +54,36 @@ static int isword(const char *s)
 typedef struct rcode rcode;
 struct rcode
 {
-	int unilen;
-	int len;
-	int sub;
-	int presub;
-	int splits;
-	int insts[];
+	int unilen;	/* number of integers in insts */
+	int len;	/* number of atoms/instructions */
+	int sub;	/* interim val = save count; final val = nsubs size */
+	int presub;	/* interim val = save count; final val = 1 rsub size */
+	int splits;	/* number of split insts */
+	int sparsesz;	/* sdense size */
+	int insts[];	/* re code */
 };
 
 enum
 {
-	// Instructions which consume input bytes (and thus fail if none left)
+	/* Instructions which consume input bytes */
 	CHAR = 1,
 	CLASS,
 	MATCH,
 	ANY,
-	// Assert position
+	/* Assert position */
 	WBEG,
 	WEND,
 	BOL,
 	EOL,
-	// Other (special) instructions
+	/* Other (special) instructions */
 	SAVE,
-	// Instructions which take relative offset as arg
+	/* Instructions which take relative offset as arg */
 	JMP,
 	SPLIT,
 	RSPLIT,
 };
 
-// Return codes for re_sizecode() and re_comp()
+/* Return codes for re_sizecode() and re_comp() */
 enum {
 	RE_SUCCESS = 0,
 	RE_SYNTAX_ERROR = -2,
@@ -111,7 +115,7 @@ pc += num;
 
 static int re_classmatch(const int *pc, int c)
 {
-	// pc points to "classnot" byte after opcode
+	/* pc points to "classnot" byte after opcode */
 	int is_positive = *pc++;
 	int cnt = *pc++;
 	while (cnt--) {
@@ -176,7 +180,7 @@ void re_dumpcode(rcode *prog)
 			break;
 		}
 	}
-	printf("Unilen: %d, insts: %d, splits: %d, counted insts: %d\n",
+	printf("unilen: %d, insts: %d, splits: %d, counted insts: %d\n",
 		prog->unilen, prog->len, prog->splits, i);
 }
 
@@ -196,7 +200,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 		switch (*re) {
 		case '\\':
 			re++;
-			if (!*re) goto syntax_error; // Trailing backslash
+			if (!*re) goto syntax_error; /* Trailing backslash */
 			if (*re == '<' || *re == '>') {
 				if (re - *re_loc > 2 && re[-2] == '\\')
 					break;
@@ -223,7 +227,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 				re++;
 			} else
 				EMIT(PC++, 1);
-			PC++; // Skip "# of pairs" byte
+			PC++; /* Skip "# of pairs" byte */
 			for (cnt = 0; *re != ']'; cnt++) {
 				if (*re == '\\') re++;
 				if (!*re) goto syntax_error;
@@ -372,9 +376,8 @@ int re_sizecode(const char *re, int *nsub)
 	dummyprog.unilen = 3;
 	dummyprog.sub = 0;
 
-	int res = _compilecode(&re, &dummyprog, /*sizecode*/1);
+	int res = _compilecode(&re, &dummyprog, 1);
 	if (res < 0) return res;
-	// If unparsed chars left
 	if (*re) return RE_SYNTAX_ERROR;
 	*nsub = dummyprog.sub;
 	return dummyprog.unilen;
@@ -388,9 +391,8 @@ int re_comp(rcode *prog, const char *re, int nsubs)
 	prog->presub = nsubs;
 	prog->splits = 0;
 
-	int res = _compilecode(&re, prog, /*sizecode*/0);
+	int res = _compilecode(&re, prog, 0);
 	if (res < 0) return res;
-	// If unparsed chars left
 	if (*re) return RE_SYNTAX_ERROR;
 	int icnt = 0, scnt = SPLIT;
 	for (int i = 0; i < prog->unilen; i++)
@@ -417,8 +419,11 @@ int re_comp(rcode *prog, const char *re, int nsubs)
 	prog->insts[prog->unilen++] = SAVE;
 	prog->insts[prog->unilen++] = prog->sub + 1;
 	prog->insts[prog->unilen++] = MATCH;
-	prog->splits = (scnt - SPLIT) / 2 + SPLIT;
-	prog->len = icnt+2;
+	prog->splits = (scnt - SPLIT) / 2;
+	prog->len = icnt + 2;
+	prog->presub = sizeof(rsub)+(sizeof(char*) * (nsubs + 1) * 2);
+	prog->sub = prog->presub * (prog->len - prog->splits + 4);
+	prog->sparsesz = (scnt - 2) * 2;
 	return RE_SUCCESS;
 }
 
@@ -434,8 +439,14 @@ if (--csub->ref == 0) { \
 	freesub = csub; \
 } \
 
-#define deccheck(nn) \
-{ decref(nsub) goto rec_check##nn; } \
+#define rec_check(nn) \
+if (si) { \
+	npc = pcs[--si]; \
+	nsub = subs[si]; \
+	goto rec##nn; \
+} \
+
+#define deccheck(nn) { decref(nsub) rec_check(nn) continue; } \
 
 #define onclist(nn)
 #define onnlist(nn) \
@@ -493,19 +504,13 @@ if (spc == MATCH) \
 	} \
 
 #define addthread(nn, list, listidx) \
-si = 0; \
 rec##nn: \
 spc = *npc; \
 if ((unsigned int)spc < WBEG) { \
 	list[listidx].sub = nsub; \
 	list[listidx++].pc = npc; \
+	rec_check(nn) \
 	list##match() \
-	rec_check##nn: \
-	if (si) { \
-		npc = pcs[--si]; \
-		nsub = subs[si]; \
-		goto rec##nn; \
-	} \
 	continue; \
 } \
 next##nn: \
@@ -557,18 +562,18 @@ clistidx = nlistidx; \
 
 int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 {
-	int rsubsize = sizeof(rsub)+(sizeof(char*)*nsubp);
-	int si, i, j, c, suboff = rsubsize, *npc, osubp = nsubp * sizeof(char*);
-	int clistidx = 0, nlistidx, spc, mcont = MATCH;
+	int rsubsize = prog->presub, suboff = rsubsize;
+	int spc, i, j, c, *npc, osubp = nsubp * sizeof(char*);
+	int si = 0, clistidx = 0, nlistidx, mcont = MATCH;
 	const char *sp = s, *_sp = s;
 	int *insts = prog->insts;
 	int *pcs[prog->splits];
-	unsigned int sdense[prog->splits * 2], sparsesz;
 	rsub *subs[prog->splits];
-	char nsubs[rsubsize * (prog->len-prog->splits+14)];
+	unsigned int sdense[prog->sparsesz], sparsesz;
 	rsub *nsub, *s1, *matched = NULL, *freesub = NULL;
 	rthread _clist[prog->len], _nlist[prog->len];
 	rthread *clist = _clist, *nlist = _nlist, *tmp;
+	char nsubs[prog->sub];
 	goto jmp_start;
 	for (;; sp = _sp) {
 		uc_len(i, sp) uc_code(c, sp)
@@ -651,10 +656,10 @@ int main(int argc, char *argv[])
 			printf("Done in %f seconds\n", elapsed_time);
 			if (!sz)
 				{ printf("-nomatch-\n"); continue; }
-			for (int k=sub_els; k>0; k--)
+			for (int k = sub_els; k > 0; k--)
 				if (sub[k-1])
 					break;
-			for (int l=0; l<sub_els; l+=2) {
+			for (int l = 0; l < sub_els; l+=2) {
 				printf("(");
 				if (sub[l] == NULL || sub[l+1] == NULL)
 					printf("?");
