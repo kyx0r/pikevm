@@ -601,7 +601,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 					}
 					matched = nsub;
 				}
-				if (sp == _sp || nlistidx == 1) {
+				if ((sp == _sp || nlistidx == 1) && matched->sub[nsubp/2]) {
 					for (i = 0, j = i; i < nsubp; i+=2, j++) {
 						subp[i] = matched->sub[j];
 						subp[i+1] = matched->sub[nsubp / 2 + j];
@@ -656,9 +656,6 @@ int main(int argc, char *argv[])
 			printf("Done in %f seconds\n", elapsed_time);
 			if (!sz)
 				{ printf("-nomatch-\n"); continue; }
-			for (int k = sub_els; k > 0; k--)
-				if (sub[k-1])
-					break;
 			for (int l = 0; l < sub_els; l+=2) {
 				printf("(");
 				if (sub[l] == NULL || sub[l+1] == NULL)
