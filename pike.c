@@ -1,4 +1,4 @@
-/* 
+/*
 Copyright 2007-2009 Russ Cox.  All Rights Reserved.
 Copyright 2020-2021 Kyryl Melekhin.  All Rights Reserved.
 Use of this source code is governed by a BSD-style
@@ -422,7 +422,7 @@ int re_comp(rcode *prog, const char *re, int nsubs)
 	prog->splits = (scnt - SPLIT) / 2;
 	prog->len = icnt + 2;
 	prog->presub = sizeof(rsub)+(sizeof(char*) * (nsubs + 1) * 2);
-	prog->sub = prog->presub * (prog->len - prog->splits + 4);
+	prog->sub = prog->presub * (prog->len - prog->splits + 3);
 	prog->sparsesz = scnt;
 	return RE_SUCCESS;
 }
@@ -431,7 +431,8 @@ int re_comp(rcode *prog, const char *re, int nsubs)
 if (freesub) \
 	{ s1 = freesub; freesub = s1->freesub; copy } \
 else \
-	{ s1 = (rsub*)&nsubs[suboff+=rsubsize]; init } \
+	{ if (suboff == prog->sub) suboff = 0; \
+	s1 = (rsub*)&nsubs[suboff]; suboff += rsubsize; init } \
 
 #define decref(csub) \
 if (--csub->ref == 0) { \
@@ -562,7 +563,7 @@ clistidx = nlistidx; \
 
 int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 {
-	int rsubsize = prog->presub, suboff = rsubsize;
+	int rsubsize = prog->presub, suboff = 0;
 	int spc, i, j, c, *npc, osubp = nsubp * sizeof(char*);
 	int si = 0, clistidx = 0, nlistidx, mcont = MATCH;
 	const char *sp = s, *_sp = s;
@@ -595,13 +596,11 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 				matched:
 				nlist[nlistidx++].pc = &mcont;
 				if (npc != &mcont) {
-					if (matched) {
+					if (matched)
 						decref(matched)
-						suboff = 0;
-					}
 					matched = nsub;
 				}
-				if ((sp == _sp || nlistidx == 1) && matched->sub[nsubp/2]) {
+				if (sp == _sp || nlistidx == 1) {
 					for (i = 0, j = i; i < nsubp; i+=2, j++) {
 						subp[i] = matched->sub[j];
 						subp[i+1] = matched->sub[nsubp / 2 + j];

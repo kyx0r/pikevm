@@ -156,7 +156,10 @@ aaaaa(aa)aa(aa(a)a)?aa
 \\\\\\\\\\\\\\\\<
 [^a]*b
 ^(.+):([0-9]+):(.+)
+^(.+):([0-9]+).(.+)
+^(.+):([0-9]+).(.+){2,5}
 ^(.+):([0-9]+):(.+)
+^(.+):([0-9]+).(.+)
 ^(.+):([0-9]+):(.+)
 ^(.+):([0-9]+):(.+)(.+)
 (.*):([0-9]*):(.*)
@@ -164,6 +167,10 @@ aaaaa(aa)aa(aa(a)a)?aa
 (((aaa+)+)bb*)(.*):([0-9]*):(.+)
 ^(.+):([0-9]+):(.{8})+
 ^(.+):([0-9]+):((aaaa)|(.+))\"
+[0-9]+.(.*)
+[0-9]+.(.*)
+([0-9])+.(.*)
+(([0-9])+)(.)(.*)
 "
 input="\
 abcdef
@@ -321,7 +328,10 @@ xabcx
 \\\\\\\\<
 hhagbdbdbjsjjjda..b
 userspace-api/media/v4l/vbi_625.svg:98:   :34bstroke-linejoin:m;stroke-miteit:10;stroke-day:n;se-ty:1\"
+userspace-api/media/v4l/vbi_625.svg:98:   :34bstroke-linejoin:m;stroke-miteit:10;stroke-day:n;se-ty:1\"
+userspace-api/media/v4l/vbi_625.svg:98:   :34bstroke-linejoin:m;stroke-miteit:10;stroke-day:n;se-ty:1\"
 h:98:   :3234434butt;stroke-linejoin:miter;stroke-miterlimit:10;stroke-dasharray:none;stroke-opacity:1\"
+h:98:   :3234utt;strokeliin:miter;stroke-mirlimit:10;stroke-dasharray:none;stroke-opacity:1n\"
 h:98:   :3234utt;strokeliin:miter;stroke-mirlimit:10;stroke-dasharray:none;stroke-opacity:1n\"
 h:98:   :3234utt;strokeliin:miter;stroke-mirlimit:10;stroke-dasharray:none;stroke-opacity:1n\"
 h:98:   :3234utt;strokeliin:miter;stroke-mirlimit:10;stroke-dasharray:none;stroke-opacity:1n\"
@@ -329,6 +339,10 @@ h:98:   :3234utt;strokeliin:miter;stroke-mirlimit:10;stroke-dasharray:none;strok
 aaaaabb grt:123:....
 h:98:   :3234utt;strokeliin:miter;stroke-mirlimit:10;stroke-dasharray:none;stroke-opacity:1n\"
 h:98:   :3234utt;strokeliin:miter;stroke-mirlimit:10;stroke-dasharray:none;stroke-opacity:1n\"
+650-253-0001
+650-253-000123434-45551221
+650-253-000123434-45551221
+650-253-000123434-455512213224hsaqer
 "
 expect="\
 (0,3)
@@ -486,7 +500,10 @@ expect="\
 (2,5)
 (3,9)
 (0,102)(0,35)(36,38)(39,102)
+(0,102)(0,77)(78,80)(81,102)
+(0,102)(0,77)(78,80)(101,102)
 (0,103)(0,1)(2,4)(5,103)
+(0,93)(0,89)(90,91)(92,93)
 (0,93)(0,1)(2,4)(5,93)
 (0,93)(0,1)(2,4)(5,92)(92,93)
 (0,93)(0,1)(2,4)(5,93)
@@ -494,6 +511,10 @@ expect="\
 (0,20)(0,7)(0,5)(0,5)(7,11)(12,15)(16,20)
 (0,93)(0,1)(2,4)(85,93)
 (0,93)(0,1)(2,4)(5,92)(?,?)(5,92)
+(0,12)(4,12)
+(0,26)(4,26)
+(0,26)(2,3)(4,26)
+(0,36)(0,3)(2,3)(3,4)(4,36)
 (0,0)
 "
 
@@ -507,12 +528,16 @@ printf '%s\n' "$regex" | while read re; do
 	exp=$(printf '%s\n' "$expect" | awk -v c=$c 'BEGIN{ RS = "" ; FS = "\n" }{print $c}')
 	var=$(./a.out "$re" "$inp")
 	if [ "$1" ]; then
-	printf '%s\n' "$var"
+		printf '%s\n' "$var"
 	fi
 	var1=$(printf '%s\n' "$var" | tail -1)
 	if [ ! "$exp" = "$var1" ]; then
 		printf '%s\n' "fail test$c regex:$re input:$inp expect:$exp output:$var1"
-		exit 1
+		if [ ! "$1" == 1 ]; then
+			exit 1
+		fi
+		c=$((c+1))
+		continue
 	fi
 	time=$(printf '%s\n' "$var" | tail -2 | head -n1)
 	printf '%s\n' "pass test$c regex:$re input:$inp expect:$exp output:$var1 $time"
