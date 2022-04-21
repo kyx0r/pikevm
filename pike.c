@@ -83,13 +83,6 @@ enum
 	RSPLIT,
 };
 
-/* Return codes for re_sizecode() and re_comp() */
-enum {
-	RE_SUCCESS = 0,
-	RE_SYNTAX_ERROR = -2,
-	RE_UNSUPPORTED_SYNTAX = -3,
-};
-
 typedef struct rsub rsub;
 struct rsub
 {
@@ -184,25 +177,22 @@ void re_dumpcode(rcode *prog)
 		prog->unilen, prog->len, prog->splits, i);
 }
 
-/* next todo: crack and factor out this recursion,
-no recursion will allow to make a meta macro out
-of this, such that re_sizecode() becomes efficient
-difficulty: very high, probably not any time soon */
-static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
+static int _compilecode(const char *re_loc, rcode *prog, int sizecode)
 {
-	const char *re = *re_loc;
+	const char *re = re_loc;
 	int *code = sizecode ? NULL : prog->insts;
 	int start = PC, term = PC;
 	int alt_label = 0, c;
-	int alt_stack[5000], altc = 0;
+	int alt_stack[4096], altc = 0;
+	int cap_stack[4096 * 5], capc = 0;
 
-	for (; *re && *re != ')';) {
+	while (*re) {
 		switch (*re) {
 		case '\\':
 			re++;
-			if (!*re) goto syntax_error; /* Trailing backslash */
+			if (!*re) return -1; /* Trailing backslash */
 			if (*re == '<' || *re == '>') {
-				if (re - *re_loc > 2 && re[-2] == '\\')
+				if (re - re_loc > 2 && re[-2] == '\\')
 					break;
 				EMIT(PC++, *re == '<' ? WBEG : WEND);
 				term = PC;
@@ -230,7 +220,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			PC++; /* Skip "# of pairs" byte */
 			for (cnt = 0; *re != ']'; cnt++) {
 				if (*re == '\\') re++;
-				if (!*re) goto syntax_error;
+				if (!*re) return -1;
 				uc_code(c, re) EMIT(PC++, c);
 				uc_len(c, re)
 				if (re[c] == '-' && re[c+1] != ']')
@@ -244,29 +234,42 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			term = PC;
 			int sub;
 			int capture = 1;
-			re++;
-			if (*re == '?') {
-				re++;
-				if (*re == ':') {
+			if (*(re+1) == '?') {
+				re += 2;
+				if (*re == ':')
 					capture = 0;
-					re++;
-				} else {
-					*re_loc = re;
-					return RE_UNSUPPORTED_SYNTAX;
-				}
+				else
+					return -1;
 			}
 			if (capture) {
 				sub = ++prog->sub;
 				EMIT(PC++, SAVE);
 				EMIT(PC++, sub);
 			}
-			int res = _compilecode(&re, prog, sizecode);
-			*re_loc = re;
-			if (res < 0) return res;
-			if (*re != ')') return RE_SYNTAX_ERROR;
-			if (capture) {
+			cap_stack[capc++] = capture;
+			cap_stack[capc++] = term;
+			cap_stack[capc++] = alt_label;
+			cap_stack[capc++] = start;
+			cap_stack[capc++] = altc;
+			alt_label = 0;
+			start = PC;
+			break;
+		case ')':
+			if (--capc-4 < 0) return -1;
+			if (code && alt_label) {
+				EMIT(alt_label, REL(alt_label, PC) + 1);
+				int _altc = cap_stack[capc];
+				for (int alts = altc; altc > _altc; altc--) {
+					int at = alt_stack[_altc+alts-altc]+(altc-_altc)*2;
+					EMIT(at, REL(at, PC) + 1);
+				}
+			}
+			start = cap_stack[--capc];
+			alt_label = cap_stack[--capc];
+			term = cap_stack[--capc];
+			if (cap_stack[--capc]) {
 				EMIT(PC++, SAVE);
-				EMIT(PC++, sub + prog->presub + 1);
+				EMIT(PC++, code[term+1] + prog->presub + 1);
 			}
 			break;
 		case '{':;
@@ -300,7 +303,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			}
 			break;
 		case '?':
-			if (PC == term) goto syntax_error;
+			if (PC == term) return -1;
 			INSERT_CODE(term, 2, PC);
 			if (re[1] == '?') {
 				EMIT(term, RSPLIT);
@@ -311,7 +314,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			term = PC;
 			break;
 		case '*':
-			if (PC == term) goto syntax_error;
+			if (PC == term) return -1;
 			INSERT_CODE(term, 2, PC);
 			EMIT(PC, JMP);
 			EMIT(PC + 1, REL(PC, term));
@@ -325,7 +328,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			term = PC;
 			break;
 		case '+':
-			if (PC == term) goto syntax_error;
+			if (PC == term) return -1;
 			if (re[1] == '?') {
 				EMIT(PC, SPLIT);
 				re++;
@@ -363,11 +366,7 @@ static int _compilecode(const char **re_loc, rcode *prog, int sizecode)
 			EMIT(at, REL(at, PC) + 1);
 		}
 	}
-	*re_loc = re;
-	return RE_SUCCESS;
-syntax_error:
-	*re_loc = re;
-	return RE_SYNTAX_ERROR;
+	return capc ? -1 : 0;
 }
 
 int re_sizecode(const char *re, int *nsub)
@@ -376,9 +375,8 @@ int re_sizecode(const char *re, int *nsub)
 	dummyprog.unilen = 3;
 	dummyprog.sub = 0;
 
-	int res = _compilecode(&re, &dummyprog, 1);
+	int res = _compilecode(re, &dummyprog, 1);
 	if (res < 0) return res;
-	if (*re) return RE_SYNTAX_ERROR;
 	*nsub = dummyprog.sub;
 	return dummyprog.unilen;
 }
@@ -391,9 +389,8 @@ int re_comp(rcode *prog, const char *re, int nsubs)
 	prog->presub = nsubs;
 	prog->splits = 0;
 
-	int res = _compilecode(&re, prog, 0);
+	int res = _compilecode(re, prog, 0);
 	if (res < 0) return res;
-	if (*re) return RE_SYNTAX_ERROR;
 	int icnt = 0, scnt = SPLIT;
 	for (int i = 0; i < prog->unilen; i++)
 		switch (prog->insts[i]) {
@@ -424,7 +421,7 @@ int re_comp(rcode *prog, const char *re, int nsubs)
 	prog->presub = sizeof(rsub)+(sizeof(char*) * (nsubs + 1) * 2);
 	prog->sub = prog->presub * (prog->len - prog->splits + 3);
 	prog->sparsesz = scnt;
-	return RE_SUCCESS;
+	return 0;
 }
 
 #define newsub(init, copy) \
@@ -636,10 +633,14 @@ int main(int argc, char *argv[])
 	int sub_els;
 	int sz = re_sizecode(argv[1], &sub_els) * sizeof(int);
 	printf("Precalculated size: %d\n", sz);
+	if (sz < 0) {
+		printf("Error in re_sizecode\n");
+		return 1;
+	}
 	char code[sizeof(rcode)+sz];
 	rcode *_code = (rcode*)code;
 	if (re_comp(_code, argv[1], sub_els)) {
-		printf("Error in re_comp");
+		printf("Error in re_comp\n");
 		return 1;
 	}
 	re_dumpcode(_code);
