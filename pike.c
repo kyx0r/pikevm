@@ -446,8 +446,7 @@ if (si) { \
 
 #define deccheck(nn) { decref(nsub) rec_check(nn) continue; } \
 
-#define onclist(nn)
-#define onnlist(nn) \
+#define onlist(nn) \
 if (sdense[spc] < sparsesz) \
 	if (sdense[sdense[spc] * 2] == (unsigned int)spc) \
 		deccheck(nn) \
@@ -467,27 +466,21 @@ subs[si++] = nsub; \
 goto next##nn; \
 
 #define saveclist() \
-newsub(memcpy(s1->sub, nsub->sub, osubp);, \
-memcpy(s1->sub, nsub->sub, osubp / 2);) \
-
-#define savenlist() \
-newsub(/*nop*/, /*nop*/) \
-memcpy(s1->sub, nsub->sub, osubp); \
-
-#define instclist(nn) \
-else if (spc == BOL) { \
-	if (_sp != s) { \
-		if (!si && !clistidx) \
-			return 0; \
-		deccheck(nn) \
-	} \
-	npc++; goto rec##nn; \
+if (npc[1] > nsubp / 2 && nsub->ref > 1) { \
+	nsub->ref--; \
+	newsub(memcpy(s1->sub, nsub->sub, osubp);, \
+	memcpy(s1->sub, nsub->sub, osubp / 2);) \
+	nsub = s1; \
+	nsub->ref = 1; \
 } \
 
-#define instnlist(nn) \
-else if (spc == JMP) { \
-	npc += 2 + npc[1]; \
-	goto rec##nn; \
+#define savenlist() \
+if (nsub->ref > 1) { \
+	nsub->ref--; \
+	newsub(/*nop*/, /*nop*/) \
+	memcpy(s1->sub, nsub->sub, osubp); \
+	nsub = s1; \
+	nsub->ref = 1; \
 } \
 
 #define clistmatch()
@@ -513,17 +506,12 @@ if ((unsigned int)spc < WBEG) { \
 } \
 next##nn: \
 if (spc > JMP) { \
-	on##list(nn) \
+	onlist(nn) \
 	npc += 2; \
 	pcs[si] = npc + npc[-1]; \
 	fastrec(nn, list, listidx) \
 } else if (spc == SAVE) { \
-	if (nsub->ref > 1) { \
-		nsub->ref--; \
-		save##list() \
-		nsub = s1; \
-		nsub->ref = 1; \
-	} \
+	save##list() \
 	nsub->sub[npc[1]] = _sp; \
 	npc += 2; \
 	goto rec##nn; \
@@ -534,7 +522,7 @@ if (spc > JMP) { \
 	npc++; goto rec##nn; \
 } else if (spc < 0) { \
 	spc = -spc; \
-	on##list(nn) \
+	onlist(nn) \
 	npc += 2; \
 	pcs[si] = npc; \
 	npc += npc[-1]; \
@@ -547,8 +535,17 @@ if (spc > JMP) { \
 	if (*_sp) \
 		deccheck(nn) \
 	npc++; goto rec##nn; \
-} inst##list(nn) \
-deccheck(nn) \
+} else if (spc == JMP) { \
+	npc += 2 + npc[1]; \
+	goto rec##nn; \
+} else { \
+	if (_sp != s) { \
+		if (!si && !clistidx) \
+			return 0; \
+		deccheck(nn) \
+	} \
+	npc++; goto rec##nn; \
+} \
 
 #define swaplist() \
 tmp = clist; \
@@ -567,7 +564,7 @@ int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp)
 	int *insts = prog->insts;
 	int *pcs[prog->splits];
 	rsub *subs[prog->splits];
-	unsigned int sdense[prog->sparsesz], sparsesz;
+	unsigned int sdense[prog->sparsesz], sparsesz = 0;
 	rsub *nsub, *s1, *matched = NULL, *freesub = NULL;
 	rthread _clist[prog->len], _nlist[prog->len];
 	rthread *clist = _clist, *nlist = _nlist, *tmp;
