@@ -185,6 +185,14 @@ aaaaa(aa)aa(aa(a)a)?aa
 ((a*b*c*)|(a*c*b*))+?
 ((a*b*c*)|(a*c*b*))*?
 ((a*b*c*)|(a*c*b*))+
+(((f+(f+f((f(f)(ff)+)+f+((f+)+))+)+)+|(f+$)+|(^.)+)+.+.+(.+.+)+..(.)?..+)
+(((f+(f+f((f(f)(ff)+)+f+((f+)+))+)+)+|(f+$)+|(^.)+)+.+.+.+.+....)
+(((f+)+)*)+
+(?:(?:(?:ff+)+)+)
+(((?:(?:(?:ffffff(a)?ffff)+)+?)*)*)+
+(((?:(?:(?:ffffff(a)?ffff)+)+?)*)*)+
+(((?:(?:(?:ffffff(a)?ffff)+)+?)*)*)+
+(((?:(?:(?:ffffff(a)?ffff)+)+?)*)*)+
 "
 input="\
 abcdef
@@ -371,6 +379,14 @@ aaa
 bbb
 bbb
 bbb
+ffffffffffffffffffffffffffffffffffffffffffff
+fffffffffffffffffffffffffffffffff
+ffffffffffffffffffffffff
+fffffff
+ffffffffffffffffaffff
+fffffffffffffffffff
+fffffaffffffffff
+fffffffffffffffffffffffff
 "
 expect="\
 (0,3)
@@ -557,6 +573,14 @@ expect="\
 (0,3)(0,3)(0,3)(?,?)
 (0,0)(?,?)(?,?)(?,?)
 (0,3)(0,3)(0,3)(?,?)
+(0,44)(0,44)(0,36)(0,36)(28,36)(30,36)(30,34)(31,32)(32,34)(35,36)(35,36)(?,?)(?,?)(38,40)(?,?)
+(0,33)(0,33)(0,25)(0,25)(17,25)(19,25)(19,23)(20,21)(21,23)(24,25)(24,25)(?,?)(?,?)
+(0,24)(0,24)(0,24)(0,24)
+(0,7)
+(0,21)(0,21)(0,21)(16,17)
+(0,10)(0,10)(0,10)(?,?)
+(0,0)(0,0)(0,0)(?,?)
+(0,20)(0,20)(0,20)(?,?)
 (0,0)
 "
 
