@@ -193,6 +193,13 @@ aaaaa(aa)aa(aa(a)a)?aa
 (((?:(?:(?:ffffff(a)?ffff)+)+?)*)*)+
 (((?:(?:(?:ffffff(a)?ffff)+)+?)*)*)+
 (((?:(?:(?:ffffff(a)?ffff)+)+?)*)*)+
+(?#3)(?>^abc)ll
+(?>^a)ll
+.(?>^a)ll
+(?<^a)ll
+ll(?=^all)
+ll(?!^all|ll)
+(?=^.all)k
 "
 input="\
 abcdef
@@ -387,6 +394,13 @@ ffffffffffffffffaffff
 fffffffffffffffffff
 fffffaffffffffff
 fffffffffffffffffffffffff
+abcdasdasabcll
+abcdasdallsabcll
+abcdasdallsabcll
+abcdasdallsabcll
+allllallall
+allllallall
+aakkskallk
 "
 expect="\
 (0,3)
@@ -581,6 +595,13 @@ expect="\
 (0,10)(0,10)(0,10)(?,?)
 (0,0)(0,0)(0,0)(?,?)
 (0,20)(0,20)(0,20)(?,?)
+(12,14)
+(8,10)
+(7,10)
+(14,16)
+(3,5)
+(9,11)
+(5,6)
 -nomatch-
 "
 

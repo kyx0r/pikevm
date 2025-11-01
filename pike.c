@@ -193,7 +193,8 @@ void re_dumpcode(rcode *prog)
 			printf("assert eol\n");
 			break;
 		case LOOKAROUND:
-			printf("---- assert lookahead %d %d\n", code[pc], code[pc+1]);
+			printf("---- assert lookaround type: %d laidx: %d static: %d start: %d\n",
+				code[pc], code[pc+1], code[pc+2], code[pc+3]);
 			re_dumpcode(prog->la[code[pc+1]]);
 			pc += 4;
 			break;
@@ -651,12 +652,12 @@ if (spc > JMP) { \
 		s0 = s; \
 	else if (npc[4]) { \
 		s0 = _sp - npc[4]; \
-		if (s0 < s) \
+		if (s0 < s) { \
+			cnt = 0; \
 			goto out##nn; \
-	} else if (sp != s) \
+		} \
+	} else \
 		s0 = sp; \
-	else \
-		goto out##nn; \
 	j = npc[2]; \
 	if (npc[3]) { \
 		s1 = (char*)(prog->la[j]+1); \
@@ -667,9 +668,9 @@ if (spc > JMP) { \
 		lb[j] = cnt ? _subp[0] : NULL; \
 	} else \
 		cnt = !!lb[j]; \
+	out##nn: \
 	if (npc[1] * ((cnt << 1) - 1) < 0) \
 		deccheck(nn) \
-	out##nn: \
 	npc += 5; goto rec##nn; \
 } else { \
 	if (flg & REG_NOTBOL || _sp != s) { \
