@@ -1,6 +1,7 @@
 #!/bin/sh
 
 regex="\
+(aaaa){0,2}
 a{0}
 (aaaa){0,}
 (aaaa){0,0}
@@ -209,6 +210,7 @@ aaaaa(aa)aa(aa(a)a)?aa
 (((?:(?:(?:ffffff(a)?ffff)+)+?)*)*)+
 "
 input="\
+aaaaaaaaaaaa
 aaaaaaaaaa
 aaaaaaaaaa
 aaaaaaaaaa
@@ -417,6 +419,7 @@ fffffaffffffffff
 fffffffffffffffffffffffff
 "
 expect="\
+(0,8)(4,8)
 (0,0)
 (0,8)(4,8)
 (0,0)(?,?)
