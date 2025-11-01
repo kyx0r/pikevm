@@ -45,8 +45,8 @@ or class is a space we want to match not assert at. But the code for it was too
 dirty and I scrapped it. Syntax for word assertions are like posix C library, not
 the pcre "\b" which can be used both in front or back of the word, because there is
 no distinction, it makes the implementation potentially even uglier.
-* Assert flags like REG_ICASE,REG_NOTEOL,REG_NOTBOL and lookahead inside
-negated bracket are implemented here (also shows use case in real world project):
+* Assert flags like REG_ICASE,REG_NOTEOL,REG_NOTBOL and lookaround assertions
+are implemented in nextvi branch or Nextvi's regex.c
 https://github.com/kyx0r/nextvi/blob/master/regex.c
 
 NOTES
