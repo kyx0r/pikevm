@@ -8,6 +8,7 @@ Use of this source code is governed by a BSD-style
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <time.h>
 
 #define MAX(a, b)	((a) < (b) ? (b) : (a))
 
@@ -794,7 +795,6 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 	re_dumpcode(_code);
-	#include <time.h>
 	if (argc > 2) {
 		sub_els = (sub_els + 1) * 2;
 		const char *sub[sub_els];
