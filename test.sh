@@ -215,6 +215,9 @@ aaaaa(aa)aa(aa(a)a)?aa
 ll(?=^all)
 ll(?!^all|ll)
 (?=^.all)k
+(?#3)(?>^abc)ll
+(?#-1).*abc(?>^int)
+(?#-1).*abc(?>^int)
 "
 input="\
 aaaaaaaaaaaa
@@ -431,6 +434,9 @@ abcdasdallsabcll
 allllallall
 allllallall
 aakkskallk
+abclldasdasabcll
+int 123 34 324 23abc kksd
+123 34 324 23abc kksd
 "
 expect="\
 (0,8)(4,8)
@@ -647,6 +653,9 @@ expect="\
 (3,5)
 (9,11)
 (5,6)
+(3,5)
+(0,20)
+-nomatch-
 -nomatch-
 "
 
