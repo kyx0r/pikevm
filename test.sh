@@ -1,6 +1,7 @@
 #!/bin/sh
 
 regex="\
+(aaaa){0,2}
 a{0}
 (aaaa){0,}
 (aaaa){0,0}
@@ -216,6 +217,7 @@ ll(?!^all|ll)
 (?=^.all)k
 "
 input="\
+aaaaaaaaaaaa
 aaaaaaaaaa
 aaaaaaaaaa
 aaaaaaaaaa
@@ -431,6 +433,7 @@ allllallall
 aakkskallk
 "
 expect="\
+(0,8)(4,8)
 (0,0)
 (0,8)(4,8)
 (0,0)(?,?)
