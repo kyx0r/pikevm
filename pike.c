@@ -792,7 +792,7 @@ int main(int argc, char *argv[])
 	char code[sizeof(rcode)+sz];
 	rcode *_code = (rcode*)code;
 	if (reg_comp(_code, argv[1], sub_els, laidx, 0)) {
-		printf("Error in re_comp\n");
+		printf("Error in reg_comp\n");
 		return 1;
 	}
 	re_dumpcode(_code);
