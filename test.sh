@@ -1,6 +1,10 @@
 #!/bin/sh
 
 regex="\
+(aaaa){5,}
+(aaaa){5,}
+(aaaa){5,}
+(aaaa){5,}
 (aaaa){0,2}
 a{0}
 (aaaa){0,}
@@ -210,6 +214,10 @@ aaaaa(aa)aa(aa(a)a)?aa
 (((?:(?:(?:ffffff(a)?ffff)+)+?)*)*)+
 "
 input="\
+aaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaa
 aaaaaaaaaaaa
 aaaaaaaaaa
 aaaaaaaaaa
@@ -419,6 +427,10 @@ fffffaffffffffff
 fffffffffffffffffffffffff
 "
 expect="\
+-nomatch-
+(0,20)(16,20)
+(0,20)(16,20)
+(0,24)(20,24)
 (0,8)(4,8)
 (0,0)
 (0,8)(4,8)
