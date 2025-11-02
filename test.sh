@@ -1,6 +1,10 @@
 #!/bin/sh
 
 regex="\
+(aaaa){5,}
+(aaaa){5,}
+(aaaa){5,}
+(aaaa){5,}
 (aaaa){0,2}
 a{0}
 (aaaa){0,}
@@ -220,6 +224,10 @@ ll(?!^all|ll)
 (?#-1).*abc(?>^int)
 "
 input="\
+aaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaa
 aaaaaaaaaaaa
 aaaaaaaaaa
 aaaaaaaaaa
@@ -439,6 +447,10 @@ int 123 34 324 23abc kksd
 123 34 324 23abc kksd
 "
 expect="\
+-nomatch-
+(0,20)(16,20)
+(0,20)(16,20)
+(0,24)(20,24)
 (0,8)(4,8)
 (0,0)
 (0,8)(4,8)
