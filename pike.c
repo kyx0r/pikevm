@@ -69,6 +69,7 @@ static void *emalloc(size_t size)
 #define REG_NEWLINE	0x02	/* Unlike posix, controls termination by '\n' */
 #define REG_NOTBOL	0x04
 #define REG_NOTEOL	0x08
+#define REG_NOCAP	0x10	/* Computes only the default match group */
 
 typedef struct rcode rcode;
 struct rcode {
@@ -128,8 +129,8 @@ pc += num;
 #define EMIT(at, byte) (code ? (code[at] = byte) : at)
 #define PC (prog->unilen)
 
-static int re_sizecode(char *re, int *nsub, int *laidx);
-static int reg_comp(rcode *prog, char *re, int nsubs, int laidx, int flags);
+static int re_sizecode(char *re, int *nsub, int *laidx, int flg);
+static int reg_comp(rcode *prog, char *re, int nsubs, int laidx, int flg);
 
 static void reg_free(rcode *p)
 {
@@ -271,10 +272,9 @@ static int compilecode(char *re_loc, rcode *prog, int sizecode, int flg)
 			int sub, sz, laidx, bal, la_static;
 			if (re[1] == '?') {
 				re += 2;
-				if (*re == ':') {
-					cap_stack[capc++] = 0;
+				if (*re == ':')
 					goto non_capture;
-				} else if (*re == '#') {
+				else if (*re == '#') {
 					lb_start = atoi(re+1);
 					if (!(re = strchr(re, ')')))
 						return -1;
@@ -320,11 +320,11 @@ static int compilecode(char *re_loc, rcode *prog, int sizecode, int flg)
 						}
 						EMIT(PC-2, p - (char*)(prog->la[prog->laidx]+1));
 					} else {
-						sz = re_sizecode(re, &sub, &laidx) * sizeof(int);
+						sz = re_sizecode(re, &sub, &laidx, REG_NOCAP) * sizeof(int);
 						if (sz < 0)
 							return -1;
 						prog->la[prog->laidx] = emalloc(sizeof(rcode)+sz);
-						if (reg_comp(prog->la[prog->laidx], re, sub, laidx, flg)) {
+						if (reg_comp(prog->la[prog->laidx], re, sub, laidx, flg | REG_NOCAP)) {
 							reg_free(prog->la[prog->laidx]);
 							return -1;
 						}
@@ -335,11 +335,15 @@ static int compilecode(char *re_loc, rcode *prog, int sizecode, int flg)
 				re = s;
 				break;
 			}
-			sub = ++prog->sub;
-			EMIT(PC++, SAVE);
-			EMIT(PC++, sub);
-			cap_stack[capc++] = 1;
-			non_capture:
+			if (flg & REG_NOCAP) {
+				non_capture:
+				cap_stack[capc++] = 0;
+			} else {
+				sub = ++prog->sub;
+				EMIT(PC++, SAVE);
+				EMIT(PC++, sub);
+				cap_stack[capc++] = 1;
+			}
 			cap_stack[capc++] = term;
 			cap_stack[capc++] = alt_label;
 			cap_stack[capc++] = start;
@@ -481,19 +485,19 @@ static int compilecode(char *re_loc, rcode *prog, int sizecode, int flg)
 	return capc ? -1 : 0;
 }
 
-static int re_sizecode(char *re, int *nsub, int *laidx)
+static int re_sizecode(char *re, int *nsub, int *laidx, int flg)
 {
 	rcode dummyprog;
 	dummyprog.unilen = 4;
 	dummyprog.sub = 0;
 	dummyprog.laidx = 0;
-	int res = compilecode(re, &dummyprog, 1, 0);
+	int res = compilecode(re, &dummyprog, 1, flg);
 	*nsub = dummyprog.sub;
 	*laidx = dummyprog.laidx;
 	return res < 0 ? res : dummyprog.unilen;
 }
 
-static int reg_comp(rcode *prog, char *re, int nsubs, int laidx, int flags)
+static int reg_comp(rcode *prog, char *re, int nsubs, int laidx, int flg)
 {
 	prog->len = 0;
 	prog->unilen = 0;
@@ -501,9 +505,9 @@ static int reg_comp(rcode *prog, char *re, int nsubs, int laidx, int flags)
 	prog->presub = nsubs;
 	prog->splits = 0;
 	prog->laidx = 0;
-	prog->flg = flags;
+	prog->flg = flg;
 	prog->la = laidx ? emalloc(laidx * sizeof(rcode*)) : NULL;
-	if (compilecode(re, prog, 0, flags) < 0)
+	if (compilecode(re, prog, 0, flg) < 0)
 		return -1;
 	int icnt = 0, scnt = SPLIT;
 	for (int i = 0; i < prog->unilen; i++)
@@ -678,7 +682,7 @@ if (spc > JMP) { \
 		for (j = npc[3], cnt = 0; cnt < j && s0[cnt] == s1[cnt]; cnt++); \
 		cnt = cnt == j; \
 	} else if (!lb[j] || s0 > lb[j]) { \
-		cnt = re_pikevm(prog->la[j], s0, _subp, 1, 0); \
+		cnt = re_pikevm(prog->la[j], s0, _subp, 2, 0); \
 		lb[j] = cnt ? _subp[0] : NULL; \
 	} else \
 		cnt = !!lb[j]; \
@@ -797,7 +801,7 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 	int sub_els, laidx;
-	int sz = re_sizecode(argv[1], &sub_els, &laidx) * sizeof(int);
+	int sz = re_sizecode(argv[1], &sub_els, &laidx, 0) * sizeof(int);
 	printf("Precalculated size: %d\n", sz);
 	if (sz < 0) {
 		printf("Error in re_sizecode\n");
