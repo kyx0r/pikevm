@@ -390,11 +390,11 @@ static int compilecode(char *re_loc, rcode *prog, int sizecode, int flg)
 				maxcnt = mincnt;
 			if (!mincnt && !maxcnt) {
 				zcase:
-			        INSERT_CODE(term, 2, PC);
-			        EMIT(term, nojmp ? SPLIT : JMP);
-			        EMIT(term + 1, REL(term, PC));
-			        term = PC;
-			        break;
+				INSERT_CODE(term, 2, PC);
+				EMIT(term, nojmp ? SPLIT : JMP);
+				EMIT(term + 1, REL(term, PC));
+				term = PC;
+				break;
 			}
 			for (i = 0; i < mincnt-1; i++) {
 				if (code)
