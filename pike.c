@@ -130,7 +130,7 @@ pc += num;
 #define PC (prog->unilen)
 
 static int re_sizecode(char *re, int *nsub, int *laidx, int flg);
-static int reg_comp(rcode *prog, char *re, int nsubs, int laidx, int flg);
+static int reg_comp(rcode *prog, char *re, int nsubc, int laidx, int flg);
 
 static void reg_free(rcode *p)
 {
@@ -497,12 +497,12 @@ static int re_sizecode(char *re, int *nsub, int *laidx, int flg)
 	return res < 0 ? res : dummyprog.unilen;
 }
 
-static int reg_comp(rcode *prog, char *re, int nsubs, int laidx, int flg)
+static int reg_comp(rcode *prog, char *re, int nsubc, int laidx, int flg)
 {
 	prog->len = 0;
 	prog->unilen = 0;
 	prog->sub = 0;
-	prog->presub = nsubs;
+	prog->presub = nsubc;
 	prog->splits = 0;
 	prog->laidx = 0;
 	prog->flg = flg;
@@ -539,7 +539,7 @@ static int reg_comp(rcode *prog, char *re, int nsubs, int laidx, int flg)
 	prog->insts[prog->unilen++] = MATCH;
 	prog->splits = MAX((scnt - SPLIT) / 2, 1);
 	prog->len = icnt + 3;
-	prog->presub = sizeof(rsub) + (sizeof(char*) * (nsubs + 1) * 2);
+	prog->presub = sizeof(rsub) + (sizeof(char*) * (nsubc + 1) * 2);
 	prog->sub = prog->presub * (icnt + 6);
 	prog->sparsesz = scnt;
 	return 0;
