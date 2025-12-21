@@ -321,11 +321,11 @@ static int compilecode(char *re_loc, rcode *prog, int sizecode, int flg)
 						}
 						EMIT(PC-2, p - (char*)(prog->la[prog->laidx]+1));
 					} else {
-						sz = re_sizecode(re, &laidx, &sub) * sizeof(int);
+						sz = re_sizecode(re, &sub, &laidx) * sizeof(int);
 						if (sz < 0)
 							return -1;
 						prog->la[prog->laidx] = emalloc(sizeof(rcode)+sz);
-						if (reg_comp(prog->la[prog->laidx], re, 0, laidx, flg)) {
+						if (reg_comp(prog->la[prog->laidx], re, sub, laidx, flg)) {
 							reg_free(prog->la[prog->laidx]);
 							return -1;
 						}
