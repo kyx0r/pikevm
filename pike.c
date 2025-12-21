@@ -298,8 +298,7 @@ static int compilecode(char *re_loc, rcode *prog, int sizecode, int flg)
 						bal++;
 						la_static = 0;
 					} else if (*s == ')') {
-						bal--;
-						if (!bal)
+						if (--bal == 0)
 							break;
 					} else if (code && la_static && strchr("|.*+?[]{}$", *s))
 						la_static = 0;
