@@ -592,7 +592,7 @@ subs[si++] = nsub; \
 goto next##nn; \
 
 #define saveclist() \
-if (npc[1] > (nsubp >> 1) && nsub->ref > 1) { \
+if (npc[1] > (nsubc >> 1) && nsub->ref > 1) { \
 	nsub->ref--; \
 	newsub(memcpy(sub->sub, nsub->sub, osubp);, \
 	memcpy(sub->sub, nsub->sub, osubp >> 1);) \
@@ -740,9 +740,9 @@ for (;; sp = _sp) { \
 				matched = nsub; \
 			} \
 			if (sp == _sp || nlistidx == 1) { \
-				for (i = 0; i < nsubp; i+=2) { \
+				for (i = 0; i < nsubc; i+=2) { \
 					subp[i] = matched->sub[i >> 1]; \
-					subp[i+1] = matched->sub[(nsubp >> 1) + (i >> 1)]; \
+					subp[i+1] = matched->sub[(nsubc >> 1) + (i >> 1)]; \
 				} \
 				_return(1) \
 			} \
@@ -765,7 +765,7 @@ for (;; sp = _sp) { \
 } \
 _return(0) \
 
-static int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp, int flg)
+static int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubc, int flg)
 {
 	if (!*s)
 		return 0;
@@ -778,7 +778,7 @@ static int re_pikevm(rcode *prog, const char *s, const char **subp, int nsubp, i
 	rthread *clist = _clist, *nlist = _nlist, *tmp;
 	const char *_subp[2], *lb[prog->laidx+1];
 	int rsubsize = prog->presub, suboff = 0;
-	int cnt, spc, i, c, j, osubp = nsubp * sizeof(char*);
+	int cnt, spc, i, c, j, osubp = nsubc * sizeof(char*);
 	int si = 0, clistidx = 0, nlistidx, mcont = MATCH;
 	int eol_ch = flg & REG_NEWLINE ? '\n' : 0;
 	unsigned int sdense[prog->sparsesz], sparsesz = 0;
