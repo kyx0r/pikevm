@@ -168,7 +168,7 @@ void re_dumpcode(rcode *prog)
 		case CLASS:;
 			pc += 2;
 			int num = code[pc - 1];
-			printf("class%s %d", (code[pc - 2] ? "" : "not"), num);
+			printf("class%s %d", (code[pc - 2] ? "not" : ""), num);
 			while (num--) {
 				printf(" 0x%02x-0x%02x", code[pc], code[pc + 1]);
 				pc += 2;
