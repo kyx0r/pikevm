@@ -49,10 +49,12 @@ else if (l == 4) \
 else \
 	dst = 0; \
 
+#define uc_isdigit(c) (((unsigned char)(c) ^ '0') < 10)
+#define uc_isalpha(c) ((unsigned char)(c) > 0x7f || (unsigned char)(((unsigned char)(c) | 0x20) - 'a') < 26)
+
 static int isword(const char *s)
 {
-	int c = (unsigned char) s[0];
-	return isalnum(c) || c == '_' || c > 127;
+	return uc_isalpha(*s) || uc_isdigit(*s) || s[0] == '_';
 }
 
 static void *emalloc(size_t size)
@@ -381,7 +383,7 @@ static int compilecode(char *re_loc, rcode *prog, int sizecode, int flg)
 		case '{':;
 			int i, maxcnt = 0, mincnt = 0, size = PC - term, nojmp = 0;
 			re++;
-			while (isdigit((unsigned char) *re))
+			while (uc_isdigit(*re))
 				mincnt = mincnt * 10 + *re++ - '0';
 			if (*re == ',') {
 				re++;
@@ -392,7 +394,7 @@ static int compilecode(char *re_loc, rcode *prog, int sizecode, int flg)
 					maxcnt = mincnt;
 					nojmp = 1;
 				}
-				while (isdigit((unsigned char) *re))
+				while (uc_isdigit(*re))
 					maxcnt = maxcnt * 10 + *re++ - '0';
 			} else
 				maxcnt = mincnt;
