@@ -11,6 +11,7 @@ Use of this source code is governed by a BSD-style
 #include <time.h>
 
 #define MAX(a, b)	((a) < (b) ? (b) : (a))
+#define NEXTSZ(o, r)	o + r + ((o + r) >> 1)
 
 unsigned char utf8_length[256] = {
 	/*	0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
@@ -67,6 +68,15 @@ static void *emalloc(size_t size)
 	return p;
 }
 
+static void *erealloc(void *p, size_t size)
+{
+	if (!(p = realloc(p, size))) {
+		fprintf(stderr, "\nrealloc: out of memory\n");
+		exit(EXIT_FAILURE);
+	}
+	return p;
+}
+
 #define REG_ICASE	0x01
 #define REG_NEWLINE	0x02	/* Unlike posix, controls termination by '\n' */
 #define REG_NOTBOL	0x04
@@ -116,6 +126,11 @@ struct rsub
 	const char *sub[];
 };
 
+typedef struct {
+	int *mem;	/* the stack both passes work on */
+	int capsz;	/* cap_stack ints in it, also alt_stack's offset */
+} rctx;
+
 typedef struct rthread rthread;
 struct rthread
 {
@@ -131,8 +146,7 @@ pc += num;
 #define EMIT(at, byte) (code ? (code[at] = byte) : at)
 #define PC (prog->unilen)
 
-static int re_sizecode(char *re, int *nsub, int *laidx, int flg);
-static int reg_comp(rcode *prog, char *re, int nsubc, int laidx, int flg);
+static rcode *re_make(char *re, int *nsubc, int flg);
 
 static void reg_free(rcode *p)
 {
@@ -207,14 +221,15 @@ void re_dumpcode(rcode *prog)
 		prog->unilen, prog->len, prog->splits, i);
 }
 
-static int compilecode(char *re_loc, rcode *prog, int sizecode, int flg)
+static int compilecode(char *re_loc, rcode *prog, rctx *ctx, int sizecode, int flg)
 {
 	char *re = re_loc, *s, *p;
 	int *code = sizecode ? NULL : prog->insts;
 	int start = PC, term = PC, lb_start = 0;
-	int alt_label = 0, c, l;
-	int alt_stack[4096], altc = 0;
-	int cap_stack[4096 * 5], capc = 0;
+	int alt_label = 0, c, l, altc = 0, capc = 0, maxcapc = 0;
+	int capsz = code ? ctx->capsz : 0;
+	int *cap_stack = ctx->mem;
+	int *alt_stack = code && cap_stack ? cap_stack + capsz : NULL;
 
 	while (*re) {
 		switch (*re) {
@@ -279,7 +294,7 @@ static int compilecode(char *re_loc, rcode *prog, int sizecode, int flg)
 			break;
 		case '(':;
 			term = PC;
-			int sub, sz, laidx, bal, la_static;
+			int sub, bal, la_static;
 			if (re[1] == '?') {
 				re += 2;
 				if (*re == ':')
@@ -329,26 +344,24 @@ static int compilecode(char *re_loc, rcode *prog, int sizecode, int flg)
 							*p++ = *re++;
 						}
 						EMIT(PC-2, p - (char*)(prog->la[prog->laidx]+1));
-					} else {
-						sz = re_sizecode(re, &sub, &laidx, REG_NOCAP) * sizeof(int);
-						if (sz < 0)
-							return -1;
-						prog->la[prog->laidx] = emalloc(sizeof(rcode)+sz);
-						if (reg_comp(prog->la[prog->laidx], re, sub, laidx, flg | REG_NOCAP)) {
-							reg_free(prog->la[prog->laidx]);
-							return -1;
-						}
-					}
+					} else if (!(prog->la[prog->laidx] =
+							re_make(re, NULL, flg | REG_NOCAP)))
+						return -1;
 					*s = ')';
 				}
 				prog->laidx++;
 				re = s;
 				break;
 			}
-			if (flg & REG_NOCAP) {
-				non_capture:
+			non_capture:
+			if (!code && capc + 5 > capsz) {
+				capsz = MAX(64, NEXTSZ(capc, 5));
+				ctx->mem = cap_stack = erealloc(ctx->mem,
+							capsz * sizeof(int));
+			}
+			if (flg & REG_NOCAP || *re == ':')
 				cap_stack[capc++] = 0;
-			} else {
+			else {
 				sub = ++prog->sub;
 				EMIT(PC++, SAVE);
 				EMIT(PC++, sub);
@@ -358,6 +371,8 @@ static int compilecode(char *re_loc, rcode *prog, int sizecode, int flg)
 			cap_stack[capc++] = alt_label;
 			cap_stack[capc++] = start;
 			cap_stack[capc++] = altc;
+			if (capc > maxcapc)
+				maxcapc = capc;
 			alt_label = 0;
 			start = PC;
 			break;
@@ -465,8 +480,11 @@ static int compilecode(char *re_loc, rcode *prog, int sizecode, int flg)
 			term = PC;
 			break;
 		case '|':
-			if (alt_label)
-				alt_stack[altc++] = alt_label;
+			if (alt_label) {
+				if (code)
+					alt_stack[altc] = alt_label;
+				altc++;
+			}
 			INSERT_CODE(start, 2, PC);
 			EMIT(PC++, JMP);
 			alt_label = PC++;
@@ -492,32 +510,26 @@ static int compilecode(char *re_loc, rcode *prog, int sizecode, int flg)
 			EMIT(at, REL(at, PC) + 1);
 		}
 	}
+	if (!code) {
+		ctx->capsz = maxcapc;
+		if (maxcapc + altc > capsz)
+			ctx->mem = erealloc(ctx->mem,
+					(maxcapc + altc) * sizeof(int));
+	}
 	return capc ? -1 : 0;
 }
 
-static int re_sizecode(char *re, int *nsub, int *laidx, int flg)
-{
-	rcode dummyprog;
-	dummyprog.unilen = 4;
-	dummyprog.sub = 0;
-	dummyprog.laidx = 0;
-	int res = compilecode(re, &dummyprog, 1, flg);
-	*nsub = dummyprog.sub;
-	*laidx = dummyprog.laidx;
-	return res < 0 ? res : dummyprog.unilen;
-}
-
-static int reg_comp(rcode *prog, char *re, int nsubc, int laidx, int flg)
+static int reg_comp(rcode *prog, char *re, rcode *hdr, rctx *ctx, int flg)
 {
 	prog->len = 0;
 	prog->unilen = 0;
 	prog->sub = 0;
-	prog->presub = nsubc;
+	prog->presub = hdr->sub;
 	prog->splits = 0;
 	prog->laidx = 0;
 	prog->flg = flg;
-	prog->la = laidx ? emalloc(laidx * sizeof(rcode*)) : NULL;
-	if (compilecode(re, prog, 0, flg) < 0)
+	prog->la = hdr->laidx ? emalloc(hdr->laidx * sizeof(rcode*)) : NULL;
+	if (compilecode(re, prog, ctx, 0, flg) < 0)
 		return -1;
 	int icnt = 0, scnt = SPLIT;
 	for (int i = 0; i < prog->unilen; i++)
@@ -549,10 +561,35 @@ static int reg_comp(rcode *prog, char *re, int nsubc, int laidx, int flg)
 	prog->insts[prog->unilen++] = MATCH;
 	prog->splits = MAX((scnt - SPLIT) / 2, 1);
 	prog->len = icnt + 3;
-	prog->presub = sizeof(rsub) + (sizeof(char*) * (nsubc + 1) * 2);
+	prog->presub = sizeof(rsub) + (sizeof(char*) * (hdr->sub + 1) * 2);
 	prog->sub = prog->presub * (icnt + 6);
 	prog->sparsesz = scnt;
 	return 0;
+}
+
+/* compile re in two passes: the first counts, the second emits the code
+ * into the buffer it sized; both work on the one stack in ctx */
+static rcode *re_make(char *re, int *nsubc, int flg)
+{
+	rcode hdr, *prog;
+	rctx ctx = {NULL, 0};
+	hdr.unilen = 4;
+	hdr.sub = 0;
+	hdr.laidx = 0;
+	if (compilecode(re, &hdr, &ctx, 1, flg & REG_NOCAP ? REG_NOCAP : 0) < 0) {
+		free(ctx.mem);
+		return NULL;
+	}
+	prog = emalloc(sizeof(rcode) + hdr.unilen * sizeof(int));
+	if (reg_comp(prog, re, &hdr, &ctx, flg)) {
+		reg_free(prog);
+		free(ctx.mem);
+		return NULL;
+	}
+	free(ctx.mem);
+	if (nsubc)
+		*nsubc = hdr.sub;
+	return prog;
 }
 
 #define _return(state) { if (eol_ch) utf8_length[eol_ch] = 1; return state; } \
@@ -810,19 +847,13 @@ int main(int argc, char *argv[])
 		printf("usage: <regex> <str...> <str...> ...\n");
 		return 0;
 	}
-	int sub_els, laidx;
-	int sz = re_sizecode(argv[1], &sub_els, &laidx, 0) * sizeof(int);
-	printf("Precalculated size: %d\n", sz);
-	if (sz < 0) {
-		printf("Error in re_sizecode\n");
+	int sub_els, sz;
+	rcode *_code = re_make(argv[1], &sub_els, 0);
+	if (!_code) {
+		printf("Error in re_make\n");
 		return 1;
 	}
-	char code[sizeof(rcode)+sz];
-	rcode *_code = (rcode*)code;
-	if (reg_comp(_code, argv[1], sub_els, laidx, 0)) {
-		printf("Error in reg_comp\n");
-		return 1;
-	}
+	printf("Precalculated size: %d\n", _code->unilen * (int)sizeof(int));
 	re_dumpcode(_code);
 	if (argc > 2) {
 		sub_els = (sub_els + 1) * 2;
@@ -851,5 +882,6 @@ int main(int argc, char *argv[])
 			printf("\n");
 		}
 	}
+	reg_free(_code);
 	return 0;
 }
